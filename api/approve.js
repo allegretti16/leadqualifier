@@ -104,7 +104,43 @@ export default async function handler(req, res) {
 // funzione per inviare email su HubSpot
 async function sendHubSpotEmail(email, message) {
   try {
-    console.log('Ricerca contatto HubSpot per:', email);
+    console.log('Invio email a:', email);
+    
+    // Costruisci l'intestazione dell'email
+    const oggetto = "Grazie per averci contattato";
+    const emailCompleta = `
+Da: Dario Calamandrei <dario.calamandrei@extendi.it>
+Oggetto: ${oggetto}
+A: ${email}
+
+${message}
+
+Cordiali saluti,
+Dario Calamandrei
+Sales Manager | Extendi S.r.l.
+`;
+
+    // Usa l'API di engagement di HubSpot per registrare l'attività email
+    const engagementUrl = 'https://api.hubapi.com/engagements/v1/engagements';
+    const engagementPayload = {
+      engagement: {
+        type: "EMAIL",
+        timestamp: Date.now()
+      },
+      associations: {
+        contactIds: []  // Verrà popolato dopo aver trovato il contatto
+      },
+      metadata: {
+        from: {
+          email: "dario.calamandrei@extendi.it",
+          firstName: "Dario",
+          lastName: "Calamandrei"
+        },
+        to: [{ email: email }],
+        subject: oggetto,
+        text: message
+      }
+    };
     
     // Prima troviamo il contatto tramite email
     const searchUrl = `https://api.hubapi.com/crm/v3/objects/contacts/search`;
@@ -137,45 +173,80 @@ async function sendHubSpotEmail(email, message) {
 
     const contact = contactData.results[0];
     const contactId = contact.id;
-    const firstname = contact.properties.firstname || '';
-    const lastname = contact.properties.lastname || '';
-
+    
     console.log('Contatto trovato:', contactId);
     
-    // Inviamo la nota invece dell'email, è più affidabile
-    const noteUrl = 'https://api.hubapi.com/crm/v3/objects/notes';
-    const noteBody = {
-      properties: {
-        hs_note_body: message,
-        hs_timestamp: Date.now()
-      },
-      associations: [
-        {
-          to: { id: contactId },
-          types: [{ associationCategory: "HUBSPOT_DEFINED", associationTypeId: 181 }]
-        }
-      ]
-    };
+    // Aggiorniamo l'associazione con l'ID del contatto
+    engagementPayload.associations.contactIds = [parseInt(contactId)];
     
-    const noteResponse = await fetch(noteUrl, {
+    // Inviamo l'engagement
+    const engagementResponse = await fetch(engagementUrl, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify(noteBody)
+      body: JSON.stringify(engagementPayload)
     });
-
-    if (!noteResponse.ok) {
-      const errorText = await noteResponse.text();
+    
+    // Verifichiamo la risposta
+    if (!engagementResponse.ok) {
+      const errorText = await engagementResponse.text();
       console.error('Risposta errore HubSpot:', errorText);
-      throw new Error(`Errore HubSpot: ${noteResponse.status} ${noteResponse.statusText}`);
+      
+      // Piano B: se fallisce l'engagement, proviamo con una nota semplice
+      const noteUrl = `https://api.hubapi.com/crm/v3/objects/notes`;
+      const noteBody = {
+        properties: {
+          hs_note_body: `Email inviata a ${email}:\n\n${message}`,
+          hs_timestamp: Date.now()
+        }
+      };
+      
+      // Creiamo la nota
+      const noteResponse = await fetch(noteUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(noteBody)
+      });
+      
+      if (!noteResponse.ok) {
+        const noteErrorText = await noteResponse.text();
+        console.error('Errore creazione nota:', noteErrorText);
+        throw new Error(`Errore HubSpot: ${noteResponse.status} ${noteResponse.statusText}`);
+      }
+      
+      const noteData = await noteResponse.json();
+      console.log('Nota creata:', noteData.id);
+      
+      // Ora associamo la nota al contatto
+      const noteId = noteData.id;
+      const associationUrl = `https://api.hubapi.com/crm/v3/objects/notes/${noteId}/associations/contacts/${contactId}/note_to_contact`;
+      
+      const associationResponse = await fetch(associationUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!associationResponse.ok) {
+        console.error('Errore nell\'associazione della nota');
+      } else {
+        console.log('Nota associata al contatto con successo');
+      }
+      
+      return;
     }
     
-    const noteData = await noteResponse.json();
-    console.log('Nota creata:', noteData.id);
+    const engagementResult = await engagementResponse.json();
+    console.log('Engagement creato:', engagementResult.id);
     
-    return noteData;
+    return engagementResult;
   } catch (error) {
     console.error('Errore nell\'invio a HubSpot:', error);
     throw error;
