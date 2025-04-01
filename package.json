@@ -1,20 +1,20 @@
 {
-  "name": "slack-hubspot-bot",
+  "name": "leadqualifier",
   "version": "1.0.0",
-  "main": "index.js",
+  "description": "Lead qualifier bot for HubSpot and Slack",
+  "main": "api/hubspot-form-submission.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "description": "",
   "dependencies": {
-    "axios": "^1.8.4",
+    "axios": "^1.6.7",
     "body-parser": "^2.2.0",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^5.1.0",
-    "openai": "^4.91.0"
+    "openai": "^4.28.0"
   }
 }
