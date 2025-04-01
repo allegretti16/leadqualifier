@@ -52,7 +52,6 @@ export default async function handler(req, res) {
     // Verifica le variabili d'ambiente
     const requiredEnvVars = [
       'OPENAI_API_KEY',
-      'ASSISTANT_ID',
       'SLACK_BOT_TOKEN',
       'SLACK_CHANNEL_ID',
       'HUBSPOT_API_KEY'
@@ -109,37 +108,40 @@ async function generateQualificationText(formData) {
   try {
     console.log('Generazione testo per:', formData.email);
     
-    // Crea un nuovo thread per ogni richiesta
-    const thread = await openai.beta.threads.create();
-    console.log('Nuovo thread creato:', thread.id);
+    const prompt = `
+Sei un assistente di vendita esperto. Hai ricevuto un'email da un potenziale cliente che ha compilato un form di contatto.
+Scrivi una risposta professionale, amichevole e personalizzata per qualificare il lead.
+La risposta dovrebbe:
+1. Essere in italiano
+2. Ringraziare il cliente per aver contattato l'azienda
+3. Confermare che hai ricevuto i dettagli del loro progetto
+4. Menzionare specificamente il tipo di progetto e il budget (se forniti)
+5. Spiegare brevemente i vantaggi della tua azienda per quel tipo di progetto
+6. Chiedere se sarebbero disponibili per una breve chiamata per discutere ulteriormente dei dettagli
+7. Firma come "Team Commerciale"
 
-    const message = await openai.beta.threads.messages.create(thread.id, {
-      role: "user",
-      content: `Genera una risposta per il seguente lead:\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}\nMessaggio: ${formData.message}`
+Ecco i dettagli del lead:
+Nome: ${formData.firstname} ${formData.lastname}
+Email: ${formData.email}
+Azienda: ${formData.company}
+Tipo Progetto: ${formData.project_type}
+Budget: ${formData.budget}
+Messaggio: ${formData.message}
+
+Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
+`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-4o-mini",
+      messages: [
+        { role: "system", content: "Sei un assistente di vendita esperto che qualifica i lead." },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.7,
+      max_tokens: 500
     });
-    console.log('Messaggio creato:', message.id);
 
-    const run = await openai.beta.threads.runs.create(thread.id, {
-      assistant_id: process.env.ASSISTANT_ID
-    });
-    console.log('Run creato:', run.id);
-
-    let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-    console.log('Stato iniziale run:', runStatus.status);
-
-    while (runStatus.status !== 'completed') {
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
-      console.log('Stato run aggiornato:', runStatus.status);
-    }
-
-    const messages = await openai.beta.threads.messages.list(thread.id);
-    console.log('Messaggi recuperati:', messages.data.length);
-
-    const lastMessage = messages.data[0];
-    console.log('Ultimo messaggio:', lastMessage.id);
-
-    return lastMessage.content[0].text.value;
+    return response.choices[0].message.content.trim();
   } catch (error) {
     console.error('Errore nella generazione del testo:', error);
     throw error;
