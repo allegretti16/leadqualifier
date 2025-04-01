@@ -84,10 +84,8 @@ export default async function handler(req, res) {
     await sendSlackMessage(formData, qualificationText);
     console.log('Messaggio inviato su Slack');
 
-    // Invia email su HubSpot
-    console.log('Inizio invio su HubSpot...');
-    await sendHubSpotEmail(formData, qualificationText);
-    console.log('Email inviata su HubSpot');
+    // Non inviamo più automaticamente l'email a HubSpot
+    // L'email verrà inviata solo dopo l'approvazione tramite l'endpoint /api/approve
 
     res.status(200).json({ success: true });
   } catch (error) {
@@ -155,7 +153,7 @@ async function sendSlackMessage(formData, qualificationText) {
     
     const message = {
       channel: process.env.SLACK_CHANNEL_ID,
-      text: `*Nuovo Lead Ricevuto*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}\n\n*Messaggio:*\n${formData.message}\n\n*Risposta Generata:*\n${qualificationText}\n\n<https://leadqualifier.vercel.app/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}|Approva e Invia>`
+      text: `*Nuovo Lead Ricevuto*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}\n\n*Messaggio:*\n${formData.message}\n\n*Risposta Generata:*\n${qualificationText}\n\n<https://leadqualifier.vercel.app/api/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}|Approva e Invia>`
     };
 
     const response = await fetch('https://slack.com/api/chat.postMessage', {
@@ -175,67 +173,6 @@ async function sendSlackMessage(formData, qualificationText) {
     console.log('Messaggio Slack inviato con successo');
   } catch (error) {
     console.error('Errore nell\'invio del messaggio Slack:', error);
-    throw error;
-  }
-}
-
-// funzione per inviare email su HubSpot
-async function sendHubSpotEmail(formData, message) {
-  try {
-    // Prima troviamo il contatto tramite email
-    const contactResponse = await fetch(
-      `https://api.hubapi.com/crm/v3/objects/contacts/search?q=${encodeURIComponent(formData.email)}&properties=hs_object_id`,
-      {
-        headers: {
-          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      }
-    );
-
-    const contactData = await contactResponse.json();
-    if (!contactData.results || contactData.results.length === 0) {
-      throw new Error('Contatto non trovato');
-    }
-
-    const contactId = contactData.results[0].id;
-
-    // Ora inviamo l'email
-    const emailResponse = await fetch(
-      'https://api.hubapi.com/crm/v3/objects/emails',
-      {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          properties: {
-            hs_email_direction: "OUTGOING",
-            hs_email_status: "SENT",
-            hs_email_subject: "Risposta alla tua richiesta",
-            hs_email_text: message,
-            hs_timestamp: Date.now(),
-            hs_email_to_email: formData.email,
-            hs_email_to_firstname: formData.firstname,
-            hs_email_to_lastname: formData.lastname
-          },
-          associations: [
-            {
-              to: { id: contactId, type: "contact" },
-              types: [{ category: "HUBSPOT_DEFINED", typeId: 1 }]
-            }
-          ]
-        })
-      }
-    );
-
-    if (!emailResponse.ok) {
-      const errorData = await emailResponse.json();
-      throw new Error(`Errore HubSpot: ${JSON.stringify(errorData)}`);
-    }
-  } catch (error) {
-    console.error('errore invio hubspot:', error);
     throw error;
   }
 } 
