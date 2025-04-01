@@ -1,5 +1,4 @@
 const { OpenAI } = require('openai');
-const axios = require('axios');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -129,15 +128,18 @@ async function sendSlackMessage(formData, qualificationText) {
       text: `*Nuovo Lead Ricevuto*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}\n\n*Messaggio:*\n${formData.message}\n\n*Risposta Generata:*\n${qualificationText}\n\n<https://leadqualifier.vercel.app/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}|Approva e Invia>`
     };
 
-    const response = await axios.post('https://slack.com/api/chat.postMessage', message, {
+    const response = await fetch('https://slack.com/api/chat.postMessage', {
+      method: 'POST',
       headers: {
         'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
         'Content-Type': 'application/json'
-      }
+      },
+      body: JSON.stringify(message)
     });
 
-    if (!response.data.ok) {
-      throw new Error(`Errore Slack: ${response.data.error}`);
+    const data = await response.json();
+    if (!data.ok) {
+      throw new Error(`Errore Slack: ${data.error}`);
     }
 
     console.log('Messaggio Slack inviato con successo');
@@ -151,13 +153,9 @@ async function sendSlackMessage(formData, qualificationText) {
 async function sendHubSpotEmail(formData, message) {
   try {
     // Prima troviamo il contatto tramite email
-    const contactResponse = await axios.get(
-      `https://api.hubapi.com/crm/v3/objects/contacts/search`,
+    const contactResponse = await fetch(
+      `https://api.hubapi.com/crm/v3/objects/contacts/search?q=${encodeURIComponent(formData.email)}&properties=hs_object_id`,
       {
-        params: {
-          q: formData.email,
-          properties: ['hs_object_id']
-        },
         headers: {
           'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
           'Content-Type': 'application/json'
@@ -165,40 +163,47 @@ async function sendHubSpotEmail(formData, message) {
       }
     );
 
-    if (!contactResponse.data.results || contactResponse.data.results.length === 0) {
+    const contactData = await contactResponse.json();
+    if (!contactData.results || contactData.results.length === 0) {
       throw new Error('Contatto non trovato');
     }
 
-    const contactId = contactResponse.data.results[0].id;
+    const contactId = contactData.results[0].id;
 
     // Ora inviamo l'email
-    await axios.post(
+    const emailResponse = await fetch(
       'https://api.hubapi.com/crm/v3/objects/emails',
       {
-        properties: {
-          hs_email_direction: "OUTGOING",
-          hs_email_status: "SENT",
-          hs_email_subject: "Risposta alla tua richiesta",
-          hs_email_text: message,
-          hs_timestamp: Date.now(),
-          hs_email_to_email: formData.email,
-          hs_email_to_firstname: formData.firstname,
-          hs_email_to_lastname: formData.lastname
-        },
-        associations: [
-          {
-            to: { id: contactId, type: "contact" },
-            types: [{ category: "HUBSPOT_DEFINED", typeId: 1 }]
-          }
-        ]
-      },
-      {
+        method: 'POST',
         headers: {
           'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
           'Content-Type': 'application/json'
-        }
+        },
+        body: JSON.stringify({
+          properties: {
+            hs_email_direction: "OUTGOING",
+            hs_email_status: "SENT",
+            hs_email_subject: "Risposta alla tua richiesta",
+            hs_email_text: message,
+            hs_timestamp: Date.now(),
+            hs_email_to_email: formData.email,
+            hs_email_to_firstname: formData.firstname,
+            hs_email_to_lastname: formData.lastname
+          },
+          associations: [
+            {
+              to: { id: contactId, type: "contact" },
+              types: [{ category: "HUBSPOT_DEFINED", typeId: 1 }]
+            }
+          ]
+        })
       }
     );
+
+    if (!emailResponse.ok) {
+      const errorData = await emailResponse.json();
+      throw new Error(`Errore HubSpot: ${JSON.stringify(errorData)}`);
+    }
   } catch (error) {
     console.error('errore invio hubspot:', error);
     throw error;
