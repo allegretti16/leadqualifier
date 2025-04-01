@@ -132,7 +132,7 @@ Sales Manager | Extendi S.r.l.
       },
       metadata: {
         from: {
-          email: "dario.calamandrei@extendi.it",
+          email: "hello@extendi.it",
           firstName: "Dario",
           lastName: "Calamandrei"
         },
