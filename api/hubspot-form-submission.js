@@ -23,7 +23,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Ricevuti dati dal form:', req.body);
+    console.log('Ricevuti dati dal form:', JSON.stringify(req.body, null, 2));
+    
+    // Verifica le variabili d'ambiente
+    const requiredEnvVars = [
+      'OPENAI_API_KEY',
+      'ASSISTANT_THREAD_ID',
+      'ASSISTANT_ID',
+      'SLACK_BOT_TOKEN',
+      'SLACK_CHANNEL_ID',
+      'HUBSPOT_API_KEY'
+    ];
+
+    const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+    if (missingEnvVars.length > 0) {
+      console.error('Variabili d\'ambiente mancanti:', missingEnvVars);
+      return res.status(500).json({ 
+        error: 'Configurazione server incompleta',
+        missingVars: missingEnvVars
+      });
+    }
     
     if (!req.body || !req.body.email) {
       console.error('Dati del form mancanti o invalidi');
@@ -31,21 +50,31 @@ export default async function handler(req, res) {
     }
 
     // Genera una risposta con OpenAI
+    console.log('Inizio generazione testo...');
     const qualificationText = await generateQualificationText(req.body);
     console.log('Risposta generata:', qualificationText);
 
     // Invia su Slack
+    console.log('Inizio invio su Slack...');
     await sendSlackMessage(req.body, qualificationText);
     console.log('Messaggio inviato su Slack');
 
     // Invia email su HubSpot
+    console.log('Inizio invio su HubSpot...');
     await sendHubSpotEmail(req.body, qualificationText);
     console.log('Email inviata su HubSpot');
 
     res.status(200).json({ success: true });
   } catch (error) {
-    console.error('Errore nel processare la submission:', error);
-    res.status(500).json({ error: error.message });
+    console.error('Errore dettagliato:', {
+      message: error.message,
+      stack: error.stack,
+      response: error.response?.data
+    });
+    res.status(500).json({ 
+      error: error.message,
+      details: error.response?.data || 'Nessun dettaglio aggiuntivo'
+    });
   }
 }
 
