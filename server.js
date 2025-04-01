@@ -10,6 +10,77 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 const PORT = process.env.PORT || 3000;
 
+// variabile per tenere traccia dell'ultimo contatto processato
+let lastProcessedContactId = null;
+
+// funzione per recuperare i nuovi contatti da HubSpot
+async function checkNewContacts() {
+  try {
+    const response = await axios.get(
+      'https://api.hubapi.com/crm/v3/objects/contacts',
+      {
+        params: {
+          limit: 10,
+          properties: ['email', 'firstname', 'lastname', 'company', 'message', 'project_type', 'budget'],
+          sorts: [{ propertyName: "createdate", direction: "DESCENDING" }]
+        },
+        headers: {
+          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    const contacts = response.data.results;
+    
+    // se è la prima volta, salva l'ID dell'ultimo contatto
+    if (!lastProcessedContactId) {
+      lastProcessedContactId = contacts[0]?.id;
+      return;
+    }
+
+    // processa solo i nuovi contatti
+    for (const contact of contacts) {
+      if (contact.id === lastProcessedContactId) break;
+      
+      console.log('nuovo lead trovato:', contact);
+      
+      // invia i dati a openai assistant
+      const qualificationText = await generateQualificationWithOpenAI(contact);
+      
+      // invia messaggio su slack
+      await sendSlackMessage(contact, qualificationText);
+    }
+
+    // aggiorna l'ID dell'ultimo contatto processato
+    lastProcessedContactId = contacts[0]?.id;
+  } catch (error) {
+    console.error('errore nel recupero contatti:', error);
+  }
+}
+
+// avvia il polling ogni 5 minuti
+setInterval(checkNewContacts, 5 * 60 * 1000);
+
+// endpoint per ricevere le submission del form HubSpot
+app.post('/hubspot-form-submission', async (req, res) => {
+  try {
+    const formData = req.body;
+    console.log('nuova submission ricevuta:', formData);
+
+    // invia i dati a openai assistant
+    const qualificationText = await generateQualificationWithOpenAI(formData);
+    
+    // invia messaggio su slack
+    await sendSlackMessage(formData, qualificationText);
+
+    res.status(200).send('submission processata');
+  } catch (error) {
+    console.error('errore nella submission:', error);
+    res.status(500).send('errore interno');
+  }
+});
+
 // verifica firma Slack
 function verifySlackSignature(req) {
   const timestamp = req.headers['x-slack-request-timestamp'];
@@ -25,33 +96,6 @@ function verifySlackSignature(req) {
   );
 }
 
-// webhook hubspot
-app.post('/hubspot-webhook', async (req, res) => {
-  try {
-    const leadData = req.body;
-    
-    // verifica che il form sia "contact form sito"
-    const formName = leadData.properties.hs_form_name;
-    if (!formName || formName !== "Contact form Sito") {
-      console.log(`form ignorato: ${formName}`);
-      return res.status(200).send('form ignorato');
-    }
-
-    console.log('lead ricevuto:', leadData);
-
-    // invia i dati a openai assistant
-    const qualificationText = await generateQualificationWithOpenAI(leadData);
-    
-    // invia messaggio su slack
-    await sendSlackMessage(leadData, qualificationText);
-
-    res.status(200).send('webhook processato');
-  } catch (error) {
-    console.error('errore nel webhook:', error);
-    res.status(500).send('errore interno');
-  }
-});
-
 // gestione interazioni Slack
 app.post('/slack-interaction', async (req, res) => {
   try {
@@ -62,16 +106,16 @@ app.post('/slack-interaction', async (req, res) => {
 
     const payload = JSON.parse(req.body.payload);
     const action = payload.actions[0];
-    const leadData = JSON.parse(action.value);
+    const formData = JSON.parse(action.value);
 
     if (action.value === 'approve') {
       // invia la risposta su HubSpot
-      await sendHubSpotEmail(leadData, leadData.qualificationText);
+      await sendHubSpotEmail(formData, formData.qualificationText);
       // aggiorna il messaggio Slack
       await updateSlackMessage(payload.response_url, 'Risposta approvata e inviata! ✅');
     } else if (action.value === 'modify') {
       // mostra modal per modificare
-      await showModifyModal(payload.trigger_id, leadData);
+      await showModifyModal(payload.trigger_id, formData);
     }
 
     res.status(200).send();
@@ -82,10 +126,32 @@ app.post('/slack-interaction', async (req, res) => {
 });
 
 // funzione per inviare email su HubSpot
-async function sendHubSpotEmail(leadData, message) {
+async function sendHubSpotEmail(formData, message) {
   try {
+    // Prima troviamo il contatto tramite email
+    const contactResponse = await axios.get(
+      `https://api.hubapi.com/crm/v3/objects/contacts/search`,
+      {
+        params: {
+          q: formData.email,
+          properties: ['hs_object_id']
+        },
+        headers: {
+          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      }
+    );
+
+    if (!contactResponse.data.results || contactResponse.data.results.length === 0) {
+      throw new Error('Contatto non trovato');
+    }
+
+    const contactId = contactResponse.data.results[0].id;
+
+    // Ora inviamo l'email
     await axios.post(
-      `https://api.hubapi.com/crm/v3/objects/emails`,
+      'https://api.hubapi.com/crm/v3/objects/emails',
       {
         properties: {
           hs_email_direction: "OUTGOING",
@@ -93,13 +159,13 @@ async function sendHubSpotEmail(leadData, message) {
           hs_email_subject: "Risposta alla tua richiesta",
           hs_email_text: message,
           hs_timestamp: Date.now(),
-          hs_email_to_email: leadData.properties.email,
-          hs_email_to_firstname: leadData.properties.firstname,
-          hs_email_to_lastname: leadData.properties.lastname
+          hs_email_to_email: formData.email,
+          hs_email_to_firstname: formData.firstname,
+          hs_email_to_lastname: formData.lastname
         },
         associations: [
           {
-            to: { id: leadData.properties.hs_object_id, type: "contact" },
+            to: { id: contactId, type: "contact" },
             types: [{ category: "HUBSPOT_DEFINED", typeId: 1 }]
           }
         ]
@@ -129,7 +195,7 @@ async function updateSlackMessage(responseUrl, text) {
 }
 
 // funzione per mostrare il modal di modifica
-async function showModifyModal(triggerId, leadData) {
+async function showModifyModal(triggerId, formData) {
   try {
     await axios.post(
       'https://slack.com/api/views.open',
@@ -147,7 +213,7 @@ async function showModifyModal(triggerId, leadData) {
               element: {
                 type: 'plain_text_input',
                 multiline: true,
-                initial_value: leadData.qualificationText
+                initial_value: formData.qualificationText
               },
               label: { type: 'plain_text', text: 'Risposta' }
             }
@@ -167,13 +233,13 @@ async function showModifyModal(triggerId, leadData) {
 }
 
 // funzione per chiamare openai assistant
-async function generateQualificationWithOpenAI(leadData) {
+async function generateQualificationWithOpenAI(formData) {
   try {
     const response = await axios.post(
       `https://api.openai.com/v1/threads/${process.env.ASSISTANT_THREAD_ID}/messages`,
       {
         role: 'user',
-        content: `analizza il lead: ${JSON.stringify(leadData)}`
+        content: `analizza la richiesta: ${JSON.stringify(formData)}`
       },
       {
         headers: {
@@ -190,13 +256,13 @@ async function generateQualificationWithOpenAI(leadData) {
 }
 
 // funzione per inviare un messaggio su slack
-async function sendSlackMessage(leadData, qualificationText) {
+async function sendSlackMessage(formData, qualificationText) {
   try {
     await axios.post(
       'https://slack.com/api/chat.postMessage',
       {
         channel: process.env.SLACK_CHANNEL_ID,
-        text: `nuovo lead: ${leadData.properties.email}`,
+        text: `nuova richiesta da: ${formData.email}`,
         blocks: [
           {
             type: 'section',
@@ -208,12 +274,12 @@ async function sendSlackMessage(leadData, qualificationText) {
               { 
                 type: 'button', 
                 text: { type: 'plain_text', text: 'approva' }, 
-                value: JSON.stringify({ ...leadData, qualificationText })
+                value: JSON.stringify({ ...formData, qualificationText })
               },
               { 
                 type: 'button', 
                 text: { type: 'plain_text', text: 'modifica' }, 
-                value: JSON.stringify({ ...leadData, qualificationText })
+                value: JSON.stringify({ ...formData, qualificationText })
               }
             ]
           }
