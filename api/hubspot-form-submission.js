@@ -22,12 +22,36 @@ export default async function handler(req, res) {
   }
 
   try {
-    console.log('Ricevuti dati dal form:', JSON.stringify(req.body, null, 2));
+    console.log('Headers della richiesta:', JSON.stringify(req.headers, null, 2));
+    
+    // Gestione speciale per richieste no-cors
+    let formData;
+    if (req.headers['content-type'] === 'text/plain' || !req.body || Object.keys(req.body).length === 0) {
+      try {
+        // Tenta di leggere il body della request come stringa
+        const rawBody = JSON.stringify(req.body);
+        console.log('Raw body ricevuto:', rawBody);
+        
+        try {
+          formData = JSON.parse(rawBody);
+        } catch (e) {
+          console.log('Errore nel parsing del JSON:', e);
+          // Se il JSON parsing fallisce, cerca di estrarre i dati manualmente
+          formData = {};
+        }
+      } catch (error) {
+        console.error('Errore nella lettura del body:', error);
+        formData = {};
+      }
+    } else {
+      formData = req.body;
+    }
+    
+    console.log('Dati del form processati:', JSON.stringify(formData, null, 2));
     
     // Verifica le variabili d'ambiente
     const requiredEnvVars = [
       'OPENAI_API_KEY',
-      'ASSISTANT_THREAD_ID',
       'ASSISTANT_ID',
       'SLACK_BOT_TOKEN',
       'SLACK_CHANNEL_ID',
@@ -43,24 +67,27 @@ export default async function handler(req, res) {
       });
     }
     
-    if (!req.body || !req.body.email) {
-      console.error('Dati del form mancanti o invalidi');
-      return res.status(400).json({ error: 'Dati del form mancanti o invalidi' });
+    if (!formData || !formData.email) {
+      console.error('Dati del form mancanti o invalidi:', formData);
+      return res.status(400).json({ 
+        error: 'Dati del form mancanti o invalidi',
+        receivedBody: formData
+      });
     }
 
     // Genera una risposta con OpenAI
     console.log('Inizio generazione testo...');
-    const qualificationText = await generateQualificationText(req.body);
+    const qualificationText = await generateQualificationText(formData);
     console.log('Risposta generata:', qualificationText);
 
     // Invia su Slack
     console.log('Inizio invio su Slack...');
-    await sendSlackMessage(req.body, qualificationText);
+    await sendSlackMessage(formData, qualificationText);
     console.log('Messaggio inviato su Slack');
 
     // Invia email su HubSpot
     console.log('Inizio invio su HubSpot...');
-    await sendHubSpotEmail(req.body, qualificationText);
+    await sendHubSpotEmail(formData, qualificationText);
     console.log('Email inviata su HubSpot');
 
     res.status(200).json({ success: true });
@@ -82,8 +109,9 @@ async function generateQualificationText(formData) {
   try {
     console.log('Generazione testo per:', formData.email);
     
-    const thread = await openai.beta.threads.retrieve(process.env.ASSISTANT_THREAD_ID);
-    console.log('Thread recuperato:', thread.id);
+    // Crea un nuovo thread per ogni richiesta
+    const thread = await openai.beta.threads.create();
+    console.log('Nuovo thread creato:', thread.id);
 
     const message = await openai.beta.threads.messages.create(thread.id, {
       role: "user",
