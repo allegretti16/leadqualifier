@@ -4,12 +4,26 @@ const axios = require('axios');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const { OpenAI } = require('openai');
+const cors = require('cors');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
 });
 
 const app = express();
+
+// Configurazione CORS
+app.use(cors({
+  origin: [
+    'https://project-jgu8bxxfn7h2eqhkey5d.framercanvas.com',
+    'https://framer.com',
+    'https://*.framer.app',
+    'https://*.framer.com'
+  ],
+  methods: ['GET', 'POST', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}));
+
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
