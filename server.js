@@ -4,7 +4,6 @@ const axios = require('axios');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
 const { OpenAI } = require('openai');
-const cors = require('cors');
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -12,24 +11,14 @@ const openai = new OpenAI({
 
 const app = express();
 
-// Configurazione CORS più permissiva
-app.use(cors({
-  origin: true, // Permette tutte le origini
-  methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
-  credentials: true
-}));
-
-// Aggiungi headers CORS manualmente per sicurezza
+// Middleware per CORS
 app.use((req, res, next) => {
   res.header('Access-Control-Allow-Origin', '*');
   res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
-  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   
-  // Gestisci la richiesta OPTIONS
   if (req.method === 'OPTIONS') {
-    return res.status(200).end();
+    return res.sendStatus(200);
   }
   
   next();
