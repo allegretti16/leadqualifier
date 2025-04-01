@@ -12,17 +12,28 @@ const openai = new OpenAI({
 
 const app = express();
 
-// Configurazione CORS
+// Configurazione CORS più permissiva
 app.use(cors({
-  origin: [
-    'https://project-jgu8bxxfn7h2eqhkey5d.framercanvas.com',
-    'https://framer.com',
-    'https://*.framer.app',
-    'https://*.framer.com'
-  ],
+  origin: true, // Permette tutte le origini
   methods: ['GET', 'POST', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
+  credentials: true
 }));
+
+// Aggiungi headers CORS manualmente per sicurezza
+app.use((req, res, next) => {
+  res.header('Access-Control-Allow-Origin', '*');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  
+  // Gestisci la richiesta OPTIONS
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+  
+  next();
+});
 
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
