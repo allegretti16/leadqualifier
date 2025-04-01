@@ -3,6 +3,11 @@ const express = require('express');
 const axios = require('axios');
 const bodyParser = require('body-parser');
 const crypto = require('crypto');
+const { OpenAI } = require('openai');
+
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY
+});
 
 const app = express();
 app.use(bodyParser.json());
@@ -46,7 +51,7 @@ async function checkNewContacts() {
       console.log('nuovo lead trovato:', contact);
       
       // invia i dati a openai assistant
-      const qualificationText = await generateQualificationWithOpenAI(contact);
+      const qualificationText = await generateQualificationText(contact);
       
       // invia messaggio su slack
       await sendSlackMessage(contact, qualificationText);
@@ -62,22 +67,32 @@ async function checkNewContacts() {
 // avvia il polling ogni 5 minuti
 setInterval(checkNewContacts, 5 * 60 * 1000);
 
-// endpoint per ricevere le submission del form HubSpot
+// endpoint per ricevere i dati del form
 app.post('/hubspot-form-submission', async (req, res) => {
   try {
-    const formData = req.body;
-    console.log('nuova submission ricevuta:', formData);
-
-    // invia i dati a openai assistant
-    const qualificationText = await generateQualificationWithOpenAI(formData);
+    console.log('Ricevuti dati dal form:', req.body);
     
-    // invia messaggio su slack
-    await sendSlackMessage(formData, qualificationText);
+    if (!req.body || !req.body.email) {
+      console.error('Dati del form mancanti o invalidi');
+      return res.status(400).json({ error: 'Dati del form mancanti o invalidi' });
+    }
 
-    res.status(200).send('submission processata');
+    // Genera una risposta con OpenAI
+    const qualificationText = await generateQualificationText(req.body);
+    console.log('Risposta generata:', qualificationText);
+
+    // Invia su Slack
+    await sendSlackMessage(req.body, qualificationText);
+    console.log('Messaggio inviato su Slack');
+
+    // Invia email su HubSpot
+    await sendHubSpotEmail(req.body, qualificationText);
+    console.log('Email inviata su HubSpot');
+
+    res.json({ success: true });
   } catch (error) {
-    console.error('errore nella submission:', error);
-    res.status(500).send('errore interno');
+    console.error('Errore nel processare la submission:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
@@ -233,67 +248,71 @@ async function showModifyModal(triggerId, formData) {
 }
 
 // funzione per chiamare openai assistant
-async function generateQualificationWithOpenAI(formData) {
+async function generateQualificationText(formData) {
   try {
-    const response = await axios.post(
-      `https://api.openai.com/v1/threads/${process.env.ASSISTANT_THREAD_ID}/messages`,
-      {
-        role: 'user',
-        content: `analizza la richiesta: ${JSON.stringify(formData)}`
-      },
-      {
-        headers: {
-          'authorization': `bearer ${process.env.OPENAI_API_KEY}`,
-          'content-type': 'application/json'
-        }
-      }
-    );
-    return response.data.choices[0]?.message?.content || 'testo non generato';
+    console.log('Generazione testo per:', formData.email);
+    
+    const thread = await openai.beta.threads.retrieve(process.env.ASSISTANT_THREAD_ID);
+    console.log('Thread recuperato:', thread.id);
+
+    const message = await openai.beta.threads.messages.create(thread.id, {
+      role: "user",
+      content: `Genera una risposta per il seguente lead:\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}\nMessaggio: ${formData.message}`
+    });
+    console.log('Messaggio creato:', message.id);
+
+    const run = await openai.beta.threads.runs.create(thread.id, {
+      assistant_id: process.env.ASSISTANT_ID
+    });
+    console.log('Run creato:', run.id);
+
+    let runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+    console.log('Stato iniziale run:', runStatus.status);
+
+    while (runStatus.status !== 'completed') {
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      runStatus = await openai.beta.threads.runs.retrieve(thread.id, run.id);
+      console.log('Stato run aggiornato:', runStatus.status);
+    }
+
+    const messages = await openai.beta.threads.messages.list(thread.id);
+    console.log('Messaggi recuperati:', messages.data.length);
+
+    const lastMessage = messages.data[0];
+    console.log('Ultimo messaggio:', lastMessage.id);
+
+    return lastMessage.content[0].text.value;
   } catch (error) {
-    console.error('errore openai:', error);
-    return 'errore nella generazione';
+    console.error('Errore nella generazione del testo:', error);
+    throw error;
   }
 }
 
-// funzione per inviare un messaggio su slack
+// funzione per inviare messaggi su Slack
 async function sendSlackMessage(formData, qualificationText) {
   try {
-    await axios.post(
-      'https://slack.com/api/chat.postMessage',
-      {
-        channel: process.env.SLACK_CHANNEL_ID,
-        text: `nuova richiesta da: ${formData.email}`,
-        blocks: [
-          {
-            type: 'section',
-            text: { type: 'mrkdwn', text: qualificationText }
-          },
-          {
-            type: 'actions',
-            elements: [
-              { 
-                type: 'button', 
-                text: { type: 'plain_text', text: 'approva' }, 
-                value: JSON.stringify({ ...formData, qualificationText })
-              },
-              { 
-                type: 'button', 
-                text: { type: 'plain_text', text: 'modifica' }, 
-                value: JSON.stringify({ ...formData, qualificationText })
-              }
-            ]
-          }
-        ]
-      },
-      {
-        headers: {
-          authorization: `bearer ${process.env.SLACK_BOT_TOKEN}`,
-          'content-type': 'application/json'
-        }
+    console.log('Invio messaggio su Slack per:', formData.email);
+    
+    const message = {
+      channel: process.env.SLACK_CHANNEL_ID,
+      text: `*Nuovo Lead Ricevuto*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}\n\n*Messaggio:*\n${formData.message}\n\n*Risposta Generata:*\n${qualificationText}\n\n<https://leadqualifier.vercel.app/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}|Approva e Invia>`
+    };
+
+    const response = await axios.post('https://slack.com/api/chat.postMessage', message, {
+      headers: {
+        'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+        'Content-Type': 'application/json'
       }
-    );
+    });
+
+    if (!response.data.ok) {
+      throw new Error(`Errore Slack: ${response.data.error}`);
+    }
+
+    console.log('Messaggio Slack inviato con successo');
   } catch (error) {
-    console.error('errore invio slack:', error);
+    console.error('Errore nell\'invio del messaggio Slack:', error);
+    throw error;
   }
 }
 
