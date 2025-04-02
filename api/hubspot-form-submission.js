@@ -109,7 +109,9 @@ Includi SOLO queste tre righe di informazioni, nient'altro.
       tool_choice: "auto"
     });
 
-    return response.choices[0].message.content.trim();
+    // Verifica che response.choices[0].message.content non sia null prima di usare trim()
+    const content = response.choices[0].message.content;
+    return content ? content.trim() : "Ricerca informazioni aziendali non riuscita. Dati non disponibili.";
   } catch (error) {
     console.error('Errore nella ricerca delle informazioni aziendali:', error);
     return "Ricerca informazioni aziendali non riuscita. Dati non disponibili.";
