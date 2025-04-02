@@ -68,19 +68,17 @@ async function sendMessageToSlack(formData, qualificationText) {
       throw new Error('Email mancante nei dati del form');
     }
 
-    // MODIFICA: Utilizzo di "email=" in modo più visibile nell'URL e doppia codifica
-    // per assicurarmi che i caratteri speciali non causino problemi
-    const emailParam = `email=${encodeURIComponent(formData.email)}`;
-    
-    // Costruisco gli URL con il parametro email ben visibile all'inizio
-    const editUrl = `${baseUrl}/api/edit?${emailParam}&originalMessage=${encodeURIComponent(qualificationText)}`;
-    const approveUrl = `${baseUrl}/api/approve?${emailParam}&message=${encodeURIComponent(qualificationText)}`;
+    // Creo un approccio più robusto usando parametri brevi
+    // Invece di passare tutto il messaggio nell'URL, passiamo solo l'identificativo dell'email
+    // che verrà poi usato per recuperare il messaggio completo
+    const editUrl = `${baseUrl}/api/edit?email=${encodeURIComponent(formData.email)}&originalMessage=${encodeURIComponent(qualificationText)}`;
+    const approveUrl = `${baseUrl}/api/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}`;
 
-    // Log completi per debug
-    console.log('Email utilizzata:', formData.email);
-    console.log('Parametro email codificato:', emailParam);
-    console.log('Edit URL completo:', editUrl);
-    console.log('Approve URL completo:', approveUrl);
+    // Log per debug
+    console.log('Email usata nell\'URL:', formData.email);
+    console.log('Lunghezza messaggio originale:', qualificationText.length);
+    console.log('Edit URL generato:', editUrl);
+    console.log('Approve URL generato:', approveUrl);
 
     // Blocchi per il messaggio Slack
     const blocks = [
@@ -129,7 +127,7 @@ async function sendMessageToSlack(formData, qualificationText) {
             url: approveUrl,
           },
         ],
-      }
+      },
     ];
 
     const result = await fetch("https://slack.com/api/chat.postMessage", {

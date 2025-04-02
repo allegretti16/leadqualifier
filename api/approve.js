@@ -172,70 +172,139 @@ export default async function handler(req, res) {
           <title>Email Approvata</title>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
+          <!-- Includo la libreria Marked.js per il rendering del Markdown -->
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
           <style>
             body {
-              font-family: Arial, sans-serif;
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
               display: flex;
               justify-content: center;
               align-items: center;
-              height: 100vh;
+              min-height: 100vh;
               margin: 0;
-              background-color: #f5f5f5;
+              padding: 20px;
+              background-color: #f9fafb;
             }
             .container {
               background-color: white;
               padding: 40px;
-              border-radius: 8px;
-              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+              border-radius: 12px;
+              box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
               text-align: center;
-              max-width: 500px;
-            }
-            h1 {
-              color: #333;
-              margin-bottom: 20px;
+              max-width: 700px;
+              width: 100%;
             }
             .success-icon {
-              color: #2ecc71;
-              font-size: 48px;
+              font-size: 64px;
               margin-bottom: 20px;
+              color: #4caf50;
             }
-            p {
-              color: #666;
+            h1 {
+              color: #2c3e50;
+              margin-bottom: 20px;
+              font-weight: 600;
+            }
+            .email-info {
+              background-color: #f1f8e9;
+              padding: 15px;
+              border-radius: 8px;
+              margin: 20px 0;
+              text-align: left;
+              overflow-wrap: break-word;
+              border-left: 4px solid #8bc34a;
+            }
+            .message-content {
+              background-color: #f9f9f9;
+              padding: 25px;
+              border-radius: 8px;
+              margin: 20px 0;
+              text-align: left;
+              overflow-wrap: break-word;
+              box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.05);
               line-height: 1.6;
             }
-            .email-details {
-              margin-top: 20px;
-              padding: 15px;
-              background-color: #f9f9f9;
-              border-radius: 4px;
-              text-align: left;
+            .message-content h1, 
+            .message-content h2, 
+            .message-content h3 {
+              margin-top: 1.5em;
+              margin-bottom: 0.8em;
+              color: #2c3e50;
+            }
+            .message-content p {
+              margin-bottom: 1.2em;
+            }
+            .message-content ul, 
+            .message-content ol {
+              padding-left: 1.5em;
+              margin-bottom: 1.2em;
+            }
+            .message-content blockquote {
+              border-left: 3px solid #ddd;
+              margin-left: 0;
+              padding-left: 1em;
+              color: #666;
+            }
+            .message-content code {
+              background-color: #f0f0f0;
+              padding: 2px 4px;
+              border-radius: 3px;
+              font-family: monospace;
             }
             .button {
               display: inline-block;
               margin-top: 20px;
-              padding: 10px 20px;
-              background-color: #3498db;
+              padding: 12px 24px;
+              background-color: #4CAF50;
               color: white;
               text-decoration: none;
               border-radius: 4px;
+              font-weight: 500;
               transition: background-color 0.3s;
+              border: none;
+              cursor: pointer;
             }
             .button:hover {
-              background-color: #2980b9;
+              background-color: #43A047;
+            }
+            .button-secondary {
+              background-color: #607D8B;
+              margin-left: 10px;
+            }
+            .button-secondary:hover {
+              background-color: #546E7A;
             }
           </style>
         </head>
         <body>
           <div class="container">
-            <div class="success-icon">✓</div>
-            <h1>Email Approvata e Registrata</h1>
-            <p>L'email è stata approvata e registrata con successo per <strong>${email}</strong>.</p>
-            <div class="email-details">
-              <p><strong>Messaggio registrato:</strong></p>
-              <p>${decodedMessage.replace(/\n/g, '<br>')}</p>
+            <div class="success-icon">✅</div>
+            <h1>Email Approvata con Successo</h1>
+            <p>La risposta è stata registrata in HubSpot e presto verrà inviata al lead.</p>
+            
+            <div class="email-info">
+              <p><strong>Email destinatario:</strong> ${email}</p>
             </div>
-            <a href="javascript:window.close()" class="button">Chiudi questa finestra</a>
+            
+            <h2>Testo del Messaggio Approvato</h2>
+            <div class="message-content" id="markdown-content">
+              <!-- Il contenuto verrà inserito tramite JavaScript -->
+            </div>
+            
+            <button onclick="window.close()" class="button">Chiudi questa finestra</button>
+            <a href="javascript:history.back()" class="button button-secondary">Torna indietro</a>
           </div>
+          
+          <script>
+            // Configura Marked.js per il rendering
+            marked.setOptions({
+              breaks: true,
+              gfm: true
+            });
+            
+            // Prendi il messaggio grezzo e renderizzalo come Markdown
+            const rawMessage = ${JSON.stringify(decodedMessage)};
+            document.getElementById('markdown-content').innerHTML = marked.parse(rawMessage);
+          </script>
         </body>
       </html>
     `);
