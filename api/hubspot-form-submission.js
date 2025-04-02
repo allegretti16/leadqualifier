@@ -72,7 +72,7 @@ Includi SOLO queste tre righe di informazioni, nient'altro.
 `;
 
     const response = await openai.chat.completions.create({
-      model: "gpt-o3-mini",
+      model: "o3-mini",
       messages: [
         {
           role: "system",
@@ -118,14 +118,19 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
       throw new Error('Email mancante nei dati del form');
     }
 
-    // Creo un approccio più robusto usando parametri brevi
-    // Invece di passare tutto il messaggio nell'URL, passiamo solo l'identificativo dell'email
-    // che verrà poi usato per recuperare il messaggio completo
-    const editUrl = `${baseUrl}/api/edit-message?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}`;
-    const approveUrl = `${baseUrl}/api/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}`;
+    // Salva temporaneamente il testo in una variabile globale con ID univoco
+    // Nota: in un ambiente di produzione reale, si dovrebbe usare un database
+    // per memorizzare questi dati invece di variabili globali
+    const messageId = Date.now().toString();
+    global[`message_${messageId}`] = qualificationText;
+
+    // Usa URL più brevi con solo l'ID del messaggio e l'email
+    const editUrl = `${baseUrl}/api/edit-message?id=${messageId}&email=${encodeURIComponent(formData.email)}`;
+    const approveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}`;
 
     // Log per debug
     console.log('Email usata nell\'URL:', formData.email);
+    console.log('ID messaggio generato:', messageId);
     console.log('Lunghezza messaggio originale:', qualificationText.length);
     console.log('Edit URL generato:', editUrl);
     console.log('Approve URL generato:', approveUrl);

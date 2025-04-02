@@ -12,12 +12,17 @@ export default async function handler(req, res) {
   try {
     // Ottiene parametri dall'URL
     const email = req.query.email;
-    const message = req.query.message;
+    const messageId = req.query.id;
 
     // Log per debug
     console.log('Parametri ricevuti in edit-message.js:');
     console.log('- Email:', email);
-    console.log('- Message:', message);
+    console.log('- Message ID:', messageId);
+
+    // Recupera il messaggio dalla variabile globale
+    const message = global[`message_${messageId}`];
+    
+    console.log('- Message trovato:', message ? 'Sì (lunghezza: ' + message.length + ')' : 'No');
 
     // Verifica che entrambi i parametri siano presenti
     if (!email || !message) {
@@ -66,6 +71,7 @@ export default async function handler(req, res) {
             <p>Non sono stati forniti tutti i parametri necessari per la modifica del messaggio.</p>
             <p><strong>Email:</strong> ${email ? 'Presente' : 'Mancante'}</p>
             <p><strong>Messaggio:</strong> ${message ? 'Presente' : 'Mancante'}</p>
+            <p>Possibile causa: il server è stato riavviato e i dati temporanei sono andati persi.</p>
           </div>
           <a href="javascript:history.back()" class="button">Torna Indietro</a>
         </body>
@@ -84,7 +90,7 @@ export default async function handler(req, res) {
     }
 
     // Costruisci l'URL di approvazione che verrà utilizzato dopo la modifica
-    const approveBaseUrl = `${baseUrl}/api/approve?email=${encodeURIComponent(email)}`;
+    const approveBaseUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(email)}`;
 
     // Invia la pagina HTML con l'editor markdown
     res.setHeader('Content-Type', 'text/html').send(`
@@ -234,7 +240,7 @@ export default async function handler(req, res) {
             
             <div class="editor-container active-container" id="container-edit">
               <div class="editor-content">
-                <textarea id="message-editor">${decodeURIComponent(message)}</textarea>
+                <textarea id="message-editor">${message}</textarea>
               </div>
             </div>
             
@@ -247,7 +253,7 @@ export default async function handler(req, res) {
             <div class="preview-container" id="container-split">
               <div class="split-container">
                 <div class="editor-content">
-                  <textarea id="message-editor-split">${decodeURIComponent(message)}</textarea>
+                  <textarea id="message-editor-split">${message}</textarea>
                 </div>
                 <div class="preview-content">
                   <div class="preview" id="preview-content-split"></div>
@@ -352,7 +358,7 @@ export default async function handler(req, res) {
           // Bottone di approvazione
           approveButton.addEventListener('click', () => {
             const modifiedMessage = encodeURIComponent(messageEditor.value);
-            const approveUrl = '${approveBaseUrl}&message=' + modifiedMessage;
+            const approveUrl = '${approveBaseUrl}&modifiedMessage=' + modifiedMessage;
             window.location.href = approveUrl;
           });
         </script>

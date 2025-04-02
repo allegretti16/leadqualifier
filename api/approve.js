@@ -49,12 +49,34 @@ export default async function handler(req, res) {
 
   try {
     // Estraggo i parametri dalla query
-    let { email, message } = req.query;
+    let { email, id, modifiedMessage } = req.query;
     
     console.log('Parametri ricevuti:');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
-    console.log('- message:', typeof message, message ? 'presente' : 'mancante', message ? `(lunghezza: ${message.length})` : '');
+    console.log('- id:', typeof id, id ? 'presente' : 'mancante');
+    console.log('- modifiedMessage:', typeof modifiedMessage, modifiedMessage ? 'presente (lunghezza: ' + modifiedMessage.length + ')' : 'mancante');
     
+    // Recupera il messaggio originale dalla variabile globale
+    let message;
+    
+    // Se è stato fornito un messaggio modificato, utilizziamo quello
+    if (modifiedMessage) {
+      try {
+        message = decodeURIComponent(modifiedMessage);
+        console.log('Utilizzo messaggio modificato fornito nell\'URL');
+      } catch (decodeError) {
+        console.error('Errore decodifica messaggio modificato:', decodeError);
+        // In caso di errore, tenta di recuperare il messaggio originale
+      }
+    }
+    
+    // Se non abbiamo ancora un messaggio valido, prova a recuperare quello originale
+    if (!message && id) {
+      message = global[`message_${id}`];
+      console.log('Recupero messaggio originale da ID:', id);
+      console.log('Messaggio originale trovato:', message ? 'Sì (lunghezza: ' + message.length + ')' : 'No');
+    }
+
     // Verifico che ci sia almeno il messaggio
     if (!message) {
       console.error('Messaggio mancante');
@@ -124,6 +146,10 @@ export default async function handler(req, res) {
                 <p><strong>Informazioni di debug:</strong></p>
                 <p>URL: ${req.url}</p>
                 <p>Query: ${JSON.stringify(req.query)}</p>
+                <p>ID messaggio: ${id || 'non fornito'}</p>
+                <p>Messaggio trovato: ${message ? 'Sì' : 'No'}</p>
+                <p>Messaggio modificato fornito: ${modifiedMessage ? 'Sì' : 'No'}</p>
+                <p>Possibile causa: il server potrebbe essere stato riavviato e i dati temporanei sono andati persi.</p>
               </div>
               
               <p>Prova a tornare indietro e cliccare nuovamente sul pulsante "Approva e Registra" nel messaggio di Slack.</p>
@@ -140,28 +166,20 @@ export default async function handler(req, res) {
       console.log('Email non fornita, utilizzo email predefinita:', email);
     }
 
-    // Decodifico il messaggio se necessario
-    let decodedMessage = message;
-    if (typeof decodedMessage === 'string') {
-      try {
-        // Provo a decodificare il messaggio se sembra essere codificato
-        if (decodedMessage.indexOf('%') >= 0) {
-          decodedMessage = decodeURIComponent(decodedMessage);
-        }
-      } catch (decodeError) {
-        console.error('Errore decodifica messaggio:', decodeError);
-        // In caso di errore, mantengo il messaggio originale
-      }
-    }
-
     console.log('Approvazione ricevuta per:', email);
-    console.log('Messaggio da inviare (lunghezza):', decodedMessage.length);
+    console.log('Messaggio da inviare (lunghezza):', message.length);
 
     // Invia l'email tramite HubSpot (crea un'attività)
-    await sendHubSpotEmail(email, decodedMessage);
+    await sendHubSpotEmail(email, message);
     
     // Invia messaggio di conferma a Slack
     await sendApprovalConfirmationToSlack(email);
+    
+    // Pulisci la variabile globale dopo l'uso (pulizia della memoria)
+    if (id) {
+      delete global[`message_${id}`];
+      console.log('Variabile globale pulita:', `message_${id}`);
+    }
     
     // Restituisci una pagina HTML di conferma
     res.setHeader('Content-Type', 'text/html');
@@ -302,87 +320,15 @@ export default async function handler(req, res) {
             });
             
             // Prendi il messaggio grezzo e renderizzalo come Markdown
-            const rawMessage = ${JSON.stringify(decodedMessage)};
+            const rawMessage = ${JSON.stringify(message)};
             document.getElementById('markdown-content').innerHTML = marked.parse(rawMessage);
           </script>
         </body>
       </html>
     `);
   } catch (error) {
-    console.error('Errore durante l\'approvazione:', error);
-    
-    // Restituisco una pagina HTML di errore
-    res.setHeader('Content-Type', 'text/html');
-    res.status(500).send(`
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <title>Errore</title>
-          <meta charset="utf-8">
-          <meta name="viewport" content="width=device-width, initial-scale=1">
-          <style>
-            body {
-              font-family: Arial, sans-serif;
-              margin: 0;
-              padding: 20px;
-              background-color: #f5f5f5;
-              display: flex;
-              justify-content: center;
-              align-items: center;
-              height: 100vh;
-            }
-            .container {
-              background-color: white;
-              padding: 30px;
-              border-radius: 8px;
-              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-              max-width: 600px;
-              text-align: center;
-            }
-            h1 {
-              color: #e74c3c;
-              margin-bottom: 20px;
-            }
-            p {
-              color: #333;
-              margin-bottom: 15px;
-            }
-            .error-details {
-              background-color: #f9f9f9;
-              padding: 15px;
-              border-radius: 4px;
-              margin: 20px 0;
-              text-align: left;
-              font-family: monospace;
-              font-size: 14px;
-              overflow-wrap: break-word;
-            }
-            .button {
-              display: inline-block;
-              margin-top: 20px;
-              padding: 10px 20px;
-              background-color: #3498db;
-              color: white;
-              text-decoration: none;
-              border-radius: 4px;
-            }
-          </style>
-        </head>
-        <body>
-          <div class="container">
-            <h1>Si è verificato un errore</h1>
-            <p>Non è stato possibile approvare l'email a causa di un errore interno.</p>
-            
-            <div class="error-details">
-              <p><strong>Dettagli errore:</strong> ${error.message}</p>
-            </div>
-            
-            <p>Prova a tornare indietro e riprovare. Se il problema persiste, contatta l'amministratore.</p>
-            <a href="javascript:window.close()" class="button">Chiudi questa finestra</a>
-          </div>
-        </body>
-      </html>
-    `);
+    console.error('Errore nella gestione approvazione:', error);
+    res.status(500).json({ error: 'Errore interno del server' });
   }
 }
 
