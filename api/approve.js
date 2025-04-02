@@ -3,7 +3,8 @@ const { OpenAI } = require('openai');
 // Funzione per inviare messaggio di conferma a Slack
 async function sendApprovalConfirmationToSlack(email) {
   try {
-    const message = `✅ *APPROVATO* - La risposta per ${email} è stata approvata e registrata in HubSpot`;
+    const message = `✅ *APPROVATO* - La risposta per ${email} è stata approvata e registrata in HubSpot
+    \n 🚫*NON INVIATA*`;
     
     const result = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
