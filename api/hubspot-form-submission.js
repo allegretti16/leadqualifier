@@ -62,13 +62,20 @@ async function sendMessageToSlack(formData, qualificationText) {
 
     console.log('URL base utilizzato:', baseUrl);
 
-    // Codifica sicura dei parametri URL - doppia codifica per evitare problemi con caratteri speciali
-    const safeEmail = encodeURIComponent(formData.email);
+    // Verifica che la email sia presente - aggiungo controllo di sicurezza
+    if (!formData.email) {
+      console.error('Email mancante nei dati del form. Non posso generare URL validi.');
+      throw new Error('Email mancante nei dati del form');
+    }
+
+    // Codifica sicura dei parametri URL
+    const safeEmail = encodeURIComponent(formData.email || "no-email");
     const safeMessage = encodeURIComponent(qualificationText);
     
     // Per sicurezza, limito la lunghezza del messaggio nell'URL a 1500 caratteri
     const truncatedMessage = safeMessage.length > 1500 ? safeMessage.substring(0, 1500) + '...' : safeMessage;
 
+    // Creo gli URL con parametri corretti e separati correttamente con '&'
     const editUrl = `${baseUrl}/api/edit?email=${safeEmail}&originalMessage=${truncatedMessage}`;
     const approveUrl = `${baseUrl}/api/approve?email=${safeEmail}&message=${truncatedMessage}`;
 
@@ -77,8 +84,8 @@ async function sendMessageToSlack(formData, qualificationText) {
     console.log('Lunghezza messaggio originale:', qualificationText.length);
     console.log('Lunghezza messaggio codificato:', safeMessage.length);
     console.log('Lunghezza messaggio troncato:', truncatedMessage.length);
-    console.log('Edit URL:', editUrl);
-    console.log('Approve URL:', approveUrl);
+    console.log('Edit URL completo:', editUrl);
+    console.log('Approve URL completo:', approveUrl);
 
     const blocks = [
       {

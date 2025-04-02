@@ -18,15 +18,15 @@ export default async function handler(req, res) {
 
   try {
     // Estraggo i parametri dalla query
-    const { email, originalMessage } = req.query;
+    let { email, originalMessage } = req.query;
     
     console.log('Parametri ricevuti:');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
     console.log('- originalMessage:', typeof originalMessage, originalMessage ? 'presente' : 'mancante');
     
-    // Verifico che i parametri siano presenti
-    if (!email || !originalMessage) {
-      console.error('Parametri mancanti:', { email, originalMessage });
+    // Verifico che ci sia almeno il messaggio originale
+    if (!originalMessage) {
+      console.error('Messaggio originale mancante');
       
       // Restituisco una pagina HTML di errore invece di JSON
       res.setHeader('Content-Type', 'text/html');
@@ -87,13 +87,9 @@ export default async function handler(req, res) {
           <body>
             <div class="container">
               <h1>Errore nei Parametri</h1>
-              <p>Non è possibile caricare il form di modifica perché mancano alcuni parametri necessari.</p>
+              <p>Non è possibile caricare il form di modifica perché manca il messaggio originale.</p>
               
               <div class="details">
-                <p><strong>Parametri mancanti:</strong></p>
-                ${!email ? '<p>• Email del destinatario</p>' : ''}
-                ${!originalMessage ? '<p>• Messaggio originale</p>' : ''}
-                
                 <p><strong>Informazioni di debug:</strong></p>
                 <p>URL: ${req.url}</p>
                 <p>Query: ${JSON.stringify(req.query)}</p>
@@ -102,6 +98,115 @@ export default async function handler(req, res) {
               <p>Prova a tornare indietro e cliccare nuovamente sul pulsante "Modifica" nel messaggio di Slack.</p>
               <a href="javascript:window.close()" class="button">Chiudi questa finestra</a>
             </div>
+          </body>
+        </html>
+      `);
+    }
+
+    // Se l'email non è presente, mostriamo un form di inserimento
+    if (!email) {
+      console.log('Email mancante, mostro il form di inserimento email');
+      
+      res.setHeader('Content-Type', 'text/html');
+      return res.status(200).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Inserisci Email</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                min-height: 100vh;
+              }
+              .container {
+                background-color: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                max-width: 500px;
+                width: 100%;
+              }
+              h1 {
+                color: #333;
+                margin-bottom: 20px;
+                font-size: 24px;
+              }
+              p {
+                color: #666;
+                margin-bottom: 20px;
+                line-height: 1.5;
+              }
+              .field {
+                margin-bottom: 20px;
+              }
+              label {
+                display: block;
+                margin-bottom: 5px;
+                font-weight: bold;
+                color: #555;
+              }
+              input {
+                width: 100%;
+                padding: 10px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-size: 16px;
+                box-sizing: border-box;
+              }
+              .button {
+                display: inline-block;
+                padding: 10px 20px;
+                background-color: #3498db;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                font-size: 16px;
+                cursor: pointer;
+              }
+              .button:hover {
+                background-color: #2980b9;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Inserisci l'email del destinatario</h1>
+              <p>Per procedere con la modifica del messaggio, inserisci l'email del destinatario:</p>
+              
+              <form id="email-form">
+                <div class="field">
+                  <label for="email">Email:</label>
+                  <input type="email" id="email" required placeholder="esempio@dominio.it">
+                </div>
+                <button type="submit" class="button">Continua</button>
+              </form>
+            </div>
+
+            <script>
+              // Quando il form viene inviato
+              document.getElementById('email-form').addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                const email = document.getElementById('email').value.trim();
+                if (!email) return;
+                
+                // Costruisci URL con entrambi i parametri
+                const originalMessage = "${encodeURIComponent(originalMessage)}";
+                const currentUrl = new URL(window.location.href);
+                currentUrl.searchParams.set('email', email);
+                
+                // Reindirizza alla stessa pagina ma con l'email inclusa
+                window.location.href = currentUrl.toString();
+              });
+            </script>
           </body>
         </html>
       `);
@@ -135,6 +240,8 @@ export default async function handler(req, res) {
           <title>Modifica Email</title>
           <meta charset="utf-8">
           <meta name="viewport" content="width=device-width, initial-scale=1">
+          <!-- Includo la libreria Marked.js per il rendering del Markdown -->
+          <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
           <style>
             body {
               font-family: Arial, sans-serif;
@@ -147,7 +254,7 @@ export default async function handler(req, res) {
               padding: 20px;
               border-radius: 8px;
               box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-              max-width: 800px;
+              max-width: 900px;
               margin: 0 auto;
             }
             h1 {
@@ -173,10 +280,12 @@ export default async function handler(req, res) {
               border-radius: 4px;
               font-size: 16px;
               font-family: inherit;
+              line-height: 1.5;
             }
             textarea {
-              min-height: 300px;
+              min-height: 250px;
               resize: vertical;
+              white-space: pre-wrap;
             }
             .buttons {
               display: flex;
@@ -203,36 +312,260 @@ export default async function handler(req, res) {
             button.approve:hover {
               background-color: #27ae60;
             }
+            .preview-container {
+              margin-top: 20px;
+              border: 1px solid #ddd;
+              border-radius: 4px;
+              padding: 15px;
+              background-color: #f9f9f9;
+            }
+            .preview-header {
+              display: flex;
+              justify-content: space-between;
+              align-items: center;
+              margin-bottom: 10px;
+            }
+            .preview-toggle {
+              background-color: transparent;
+              color: #3498db;
+              border: 1px solid #3498db;
+              padding: 5px 10px;
+              border-radius: 4px;
+              cursor: pointer;
+              font-size: 14px;
+            }
+            .preview-content {
+              padding: 10px;
+              background-color: white;
+              border-radius: 4px;
+              line-height: 1.6;
+              overflow-wrap: break-word;
+            }
+            .preview-content p {
+              margin-top: 0;
+              margin-bottom: 16px;
+            }
+            .preview-content ul, .preview-content ol {
+              margin-bottom: 16px;
+              padding-left: 30px;
+            }
+            .preview-content li {
+              margin-bottom: 8px;
+            }
+            .preview-content h1, .preview-content h2, .preview-content h3 {
+              margin-top: 24px;
+              margin-bottom: 16px;
+              color: #333;
+            }
+            .preview-content code {
+              background-color: #f1f1f1;
+              padding: 2px 4px;
+              border-radius: 3px;
+              font-family: monospace;
+            }
+            .flex-container {
+              display: flex;
+              gap: 20px;
+            }
+            .editor-container, .preview-container {
+              flex: 1;
+            }
+            .split-view {
+              display: none;
+            }
+            .split-view.active {
+              display: flex;
+            }
+            .view-toggle {
+              margin-top: 10px;
+              display: flex;
+              gap: 10px;
+              justify-content: center;
+            }
+            .view-toggle button {
+              background-color: #f1f1f1;
+              color: #333;
+              border: 1px solid #ddd;
+              padding: 5px 15px;
+              font-size: 14px;
+            }
+            .view-toggle button.active {
+              background-color: #3498db;
+              color: white;
+              border-color: #3498db;
+            }
           </style>
         </head>
         <body>
           <div class="container">
             <h1>Modifica Email</h1>
-            <form id="edit-form">
+            
+            <div class="view-toggle">
+              <button id="btn-editor" class="active" onclick="switchView('editor')">Solo Editor</button>
+              <button id="btn-split" onclick="switchView('split')">Editor + Anteprima</button>
+              <button id="btn-preview" onclick="switchView('preview')">Solo Anteprima</button>
+            </div>
+            
+            <div id="editor-view" class="split-view active">
+              <form id="edit-form">
+                <div class="field">
+                  <label for="email">Email Destinatario:</label>
+                  <input type="email" id="email" value="${email}" ${email ? 'disabled' : ''} required>
+                </div>
+                <div class="field">
+                  <label for="subject">Oggetto:</label>
+                  <input type="text" id="subject" value="Grazie per averci contattato" disabled>
+                </div>
+                <div class="field">
+                  <label for="message">Messaggio:</label>
+                  <textarea id="message" oninput="updatePreview()">${decodedMessage}</textarea>
+                </div>
+                <div class="buttons">
+                  <button type="button" onclick="window.close()">Annulla</button>
+                  <button type="button" class="approve" onclick="approveEmail()">Approva e Registra</button>
+                </div>
+              </form>
+            </div>
+            
+            <div id="split-view" class="split-view">
+              <div class="flex-container">
+                <div class="editor-container">
+                  <form id="split-form">
+                    <div class="field">
+                      <label for="email-split">Email Destinatario:</label>
+                      <input type="email" id="email-split" value="${email}" ${email ? 'disabled' : ''} required>
+                    </div>
+                    <div class="field">
+                      <label for="subject-split">Oggetto:</label>
+                      <input type="text" id="subject-split" value="Grazie per averci contattato" disabled>
+                    </div>
+                    <div class="field">
+                      <label for="message-split">Messaggio:</label>
+                      <textarea id="message-split" oninput="updatePreview(this.value)">${decodedMessage}</textarea>
+                    </div>
+                    <div class="buttons">
+                      <button type="button" onclick="window.close()">Annulla</button>
+                      <button type="button" class="approve" onclick="approveEmailSplit()">Approva e Registra</button>
+                    </div>
+                  </form>
+                </div>
+                <div class="preview-container">
+                  <div class="preview-header">
+                    <h3>Anteprima</h3>
+                    <button class="preview-toggle" onclick="refreshPreview()">Aggiorna</button>
+                  </div>
+                  <div id="preview-content" class="preview-content"></div>
+                </div>
+              </div>
+            </div>
+            
+            <div id="preview-view" class="split-view">
               <div class="field">
-                <label for="email">Email Destinatario:</label>
-                <input type="email" id="email" value="${email}" disabled>
+                <label for="email-preview">Email Destinatario:</label>
+                <input type="email" id="email-preview" value="${email}" disabled>
               </div>
               <div class="field">
-                <label for="subject">Oggetto:</label>
-                <input type="text" id="subject" value="Grazie per averci contattato" disabled>
+                <label for="subject-preview">Oggetto:</label>
+                <input type="text" id="subject-preview" value="Grazie per averci contattato" disabled>
               </div>
-              <div class="field">
-                <label for="message">Messaggio:</label>
-                <textarea id="message">${decodedMessage}</textarea>
+              <div class="preview-container">
+                <div class="preview-header">
+                  <h3>Anteprima del Messaggio</h3>
+                </div>
+                <div id="preview-content-full" class="preview-content"></div>
               </div>
               <div class="buttons">
                 <button type="button" onclick="window.close()">Annulla</button>
-                <button type="button" class="approve" onclick="approveEmail()">Approva e Registra</button>
+                <button type="button" onclick="switchView('editor')">Modifica</button>
+                <button type="button" class="approve" onclick="approveEmailPreview()">Approva e Registra</button>
               </div>
-            </form>
+            </div>
           </div>
 
           <script>
-            // Funzione per approvare direttamente l'email
+            // Funzioni per gestire la visualizzazione
+            function switchView(view) {
+              document.getElementById('editor-view').classList.remove('active');
+              document.getElementById('split-view').classList.remove('active');
+              document.getElementById('preview-view').classList.remove('active');
+              
+              document.getElementById('btn-editor').classList.remove('active');
+              document.getElementById('btn-split').classList.remove('active');
+              document.getElementById('btn-preview').classList.remove('active');
+              
+              document.getElementById(view + '-view').classList.add('active');
+              document.getElementById('btn-' + view).classList.add('active');
+              
+              // Sincronizza i contenuti tra le viste
+              syncContent(view);
+              
+              // Aggiorna l'anteprima quando si passa a una vista con anteprima
+              if (view === 'split' || view === 'preview') {
+                refreshPreview();
+              }
+            }
+            
+            // Sincronizza i contenuti tra le diverse viste
+            function syncContent(currentView) {
+              const message = document.getElementById('message').value;
+              const email = document.getElementById('email').value;
+              
+              if (currentView !== 'editor') {
+                document.getElementById('message-split').value = message;
+                document.getElementById('email-split').value = email;
+              }
+              
+              if (currentView !== 'split') {
+                document.getElementById('message').value = document.getElementById('message-split').value;
+                document.getElementById('email').value = document.getElementById('email-split').value;
+              }
+              
+              document.getElementById('email-preview').value = email;
+            }
+            
+            // Funzione per aggiornare l'anteprima
+            function updatePreview(value) {
+              // Sincronizza i contenuti tra le diverse viste
+              const message = value || document.getElementById('message').value;
+              document.getElementById('message').value = message;
+              document.getElementById('message-split').value = message;
+            }
+            
+            // Aggiorna la visualizzazione markdown
+            function refreshPreview() {
+              const message = document.getElementById('message').value;
+              const htmlContent = marked.parse(message);
+              document.getElementById('preview-content').innerHTML = htmlContent;
+              document.getElementById('preview-content-full').innerHTML = htmlContent;
+            }
+            
+            // Funzione per approvare direttamente l'email (vista editor)
             function approveEmail() {
               const message = document.getElementById('message').value;
               const email = document.getElementById('email').value;
+              approveWithParams(email, message);
+            }
+            
+            // Funzione per approvare l'email (vista split)
+            function approveEmailSplit() {
+              const message = document.getElementById('message-split').value;
+              const email = document.getElementById('email-split').value;
+              approveWithParams(email, message);
+            }
+            
+            // Funzione per approvare l'email (vista anteprima)
+            function approveEmailPreview() {
+              const message = document.getElementById('message').value;
+              const email = document.getElementById('email-preview').value;
+              approveWithParams(email, message);
+            }
+            
+            // Funzione comune per l'approvazione
+            function approveWithParams(email, message) {
+              if (!email) {
+                alert('Per favore inserisci l\'email del destinatario');
+                return;
+              }
               
               // Utilizziamo la stessa origine per l'URL di approvazione
               const baseUrl = window.location.origin;
@@ -243,6 +576,21 @@ export default async function handler(req, res) {
               
               window.location.href = approveUrl;
             }
+            
+            // Inizializza la pagina
+            document.addEventListener('DOMContentLoaded', function() {
+              // Configurazione marked.js per il parsing del markdown
+              marked.setOptions({
+                breaks: true,
+                gfm: true
+              });
+              
+              // Aggiorna l'anteprima all'avvio
+              refreshPreview();
+            });
+            
+            // Aggiorna subito l'anteprima
+            refreshPreview();
             
             // Log per debug
             console.log('Form di modifica caricato');
