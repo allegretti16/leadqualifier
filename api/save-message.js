@@ -12,7 +12,7 @@ function getBaseUrl() {
 export default async function handler(req, res) {
   // Abilita CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // Gestisci preflight CORS
@@ -21,14 +21,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { id, message, email, skipHubspot } = req.query;
+    const { id, message, email } = req.query;
 
-    if (!id || !message) {
-      return res.status(400).json({ error: 'ID e messaggio sono richiesti' });
+    // Verifica che l'email sia presente e valida
+    if (!email || !email.includes('@')) {
+      return res.status(400).json({ error: 'Email mancante o non valida' });
+    }
+
+    // Verifica che l'ID sia presente
+    if (!id) {
+      return res.status(400).json({ error: 'ID messaggio mancante' });
     }
 
     const baseUrl = getBaseUrl();
-    const approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email || '')}&skipHubspot=${skipHubspot || 'true'}`;
+    const approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}`;
 
     // Restituisci una pagina HTML che salva il messaggio in localStorage e poi reindirizza
     res.setHeader('Content-Type', 'text/html');
@@ -80,36 +86,50 @@ export default async function handler(req, res) {
               color: #34495e;
               line-height: 1.6;
             }
+            .error {
+              color: #e74c3c;
+              margin-top: 20px;
+              padding: 10px;
+              background-color: #fdf0f0;
+              border-radius: 4px;
+              display: none;
+            }
           </style>
         </head>
         <body>
           <div class="container">
             <div class="spinner"></div>
             <h1>Salvataggio in corso...</h1>
-            <p>Stiamo salvando il messaggio nel tuo browser...</p>
+            <p>Stiamo preparando il messaggio per la modifica...</p>
+            <div id="error" class="error"></div>
           </div>
           
           <script>
-            // Salva il messaggio in localStorage
             const messageId = "${id}";
-            const message = ${JSON.stringify(message)};
+            const email = "${email}";
+            const message = ${JSON.stringify(message || '')};
+            const approveUrl = "${approveUrl}";
+            
+            function showError(message) {
+              const errorDiv = document.getElementById('error');
+              errorDiv.textContent = message;
+              errorDiv.style.display = 'block';
+              document.querySelector('.spinner').style.display = 'none';
+            }
             
             try {
+              // Salva il messaggio in localStorage
               localStorage.setItem('message_' + messageId, message);
-              console.log('Messaggio salvato con successo');
+              console.log('Messaggio salvato nel localStorage');
+              
+              // Salva anche l'email per sicurezza
+              localStorage.setItem('email_' + messageId, email);
               
               // Reindirizza alla pagina di approvazione
-              window.location.href = "${approveUrl}";
+              window.location.href = approveUrl;
             } catch (error) {
               console.error('Errore nel salvataggio:', error);
-              document.body.innerHTML = \`
-                <div class="container">
-                  <h1 style="color: #e74c3c;">Errore</h1>
-                  <p>Si è verificato un errore durante il salvataggio del messaggio.</p>
-                  <p>Dettaglio: \${error.message}</p>
-                  <button onclick="window.location.reload()" style="padding: 10px 20px; margin-top: 20px;">Riprova</button>
-                </div>
-              \`;
+              showError('Si è verificato un errore durante il salvataggio del messaggio: ' + error.message);
             }
           </script>
         </body>

@@ -306,92 +306,10 @@ export default async function handler(req, res) {
       `);
     }
 
-    // Verifico che ci sia il messaggio
-    if (!message) {
-      console.error('Messaggio mancante');
-      
-      // Restituisco una pagina HTML di errore
-      res.setHeader('Content-Type', 'text/html');
-      return res.status(400).send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Errore Parametri</title>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              body {
-                font-family: Arial, sans-serif;
-                margin: 0;
-                padding: 20px;
-                background-color: #f5f5f5;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                height: 100vh;
-              }
-              .container {
-                background-color: white;
-                padding: 30px;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-                max-width: 600px;
-                text-align: center;
-              }
-              h1 {
-                color: #e74c3c;
-                margin-bottom: 20px;
-              }
-              p {
-                color: #333;
-                margin-bottom: 15px;
-                line-height: 1.5;
-              }
-              .details {
-                background-color: #f9f9f9;
-                padding: 15px;
-                border-radius: 4px;
-                margin: 20px 0;
-                text-align: left;
-                overflow-wrap: break-word;
-              }
-              .button {
-                display: inline-block;
-                margin-top: 20px;
-                padding: 10px 20px;
-                background-color: #3498db;
-                color: white;
-                text-decoration: none;
-                border-radius: 4px;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <h1>Errore nei Parametri</h1>
-              <p>Non è possibile approvare l'email perché manca il messaggio da inviare.</p>
-              
-              <div class="details">
-                <p><strong>Informazioni di debug:</strong></p>
-                <p>URL: ${req.url}</p>
-                <p>Query: ${JSON.stringify(req.query)}</p>
-                <p>Email: ${email || 'non fornita'}</p>
-                <p>Messaggio fornito: No</p>
-                <p>Possibile causa: L'URL potrebbe essere incompleto o il messaggio troppo lungo per essere incluso nell'URL.</p>
-              </div>
-              
-              <p>Torna alla pagina principale e riprova. Se il problema persiste, contatta l'amministratore del sistema.</p>
-              <a href="javascript:window.close()" class="button">Chiudi questa finestra</a>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-
-    // Se l'email non è presente, utilizziamo un valore predefinito
-    if (!email) {
-      email = "no-reply@extendi.it";
-      console.log('Email non fornita, utilizzo email predefinita:', email);
+    // Verifica che l'email sia presente e valida
+    if (!email || !email.includes('@')) {
+      console.error('Email mancante o non valida:', email);
+      return res.status(400).json({ error: 'Email mancante o non valida' });
     }
 
     console.log('Approvazione ricevuta per:', email);
