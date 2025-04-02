@@ -41,85 +41,78 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
   }
 }
 
-// Funzione per ricercare informazioni sull'azienda
-async function getCompanyInfo(companyName) {
+// Funzione per cercare informazioni sull'azienda sul web
+async function searchCompanyInfo(companyName) {
   try {
-    // Debug log per cosa riceviamo
-    console.log('getCompanyInfo ricevuto:', companyName, 'Tipo:', typeof companyName);
-    
-    // Controllo vuoto - dato che companyName è già stato convertito in stringa prima della chiamata
-    // possiamo usare trim() senza rischio
-    if (!companyName || companyName.trim() === '') {
-      return "Nessuna informazione disponibile (nome azienda non fornito)";
+    if (!companyName) {
+      console.log('Nome azienda non fornito, ricerca web saltata');
+      return 'Informazioni non disponibili (nome azienda non fornito)';
     }
 
-    // Usiamo la versione trimmed del nome azienda per la ricerca
-    const trimmedName = companyName.trim();
-    console.log('Ricerca informazioni per azienda:', trimmedName);
+    console.log('Ricerca informazioni per azienda:', companyName);
     
-    const prompt = `
-Sei un assistente che deve cercare informazioni su Google riguardo a "${trimmedName}".
-Devi fare una ricerca su Google per trovare:
-
-1. Il fatturato dell'azienda (cerca specificamente "fatturato ${trimmedName}" o "revenue ${trimmedName}")
-2. Il numero di dipendenti dell'azienda
-3. Il settore in cui opera l'azienda
-
-Cerca questi dati sul web, idealmente da fonti come il sito ufficiale dell'azienda, LinkedIn, registri aziendali, o articoli finanziari.
-Se l'azienda è italiana, cerca il fatturato in euro.
-
-Dopo aver effettuato la ricerca, formatta la risposta come segue:
-**${trimmedName}**
-- Fatturato: [importo specifico che hai trovato, con l'anno se disponibile] 
-- Dipendenti: [numero specifico o range]
-- Settore: [settore principale]
-
-Se non riesci a trovare informazioni specifiche su qualcuno di questi punti, scrivi "dati non disponibili".
-Includi SOLO queste tre righe di informazioni, nient'altro.
-`;
-
+    const searchQuery = `${companyName} fatturato numero dipendenti informazioni aziendali`;
+    
     const response = await openai.chat.completions.create({
-      model: "o3-mini",
+      model: "gpt-4o",
       messages: [
-        {
-          role: "system",
-          content: "Sei un assistente esperto nella ricerca di informazioni aziendali su Google. Devi cercare dati fattuali sulle aziende dal web, in particolare fatturato, dipendenti e settore. Se non riesci a trovare dati esatti, devi indicarlo chiaramente."
+        { 
+          role: "system", 
+          content: "Sei un assistente che aiuta a raccogliere informazioni sulle aziende. Estrai e riassumi in italiano i dati più rilevanti." 
         },
-        { role: "user", content: prompt }
+        { 
+          role: "user", 
+          content: `Cerca informazioni su questa azienda: ${companyName}. Concentrati su: fatturato, numero di dipendenti, settore, prodotti/servizi principali. Presenta le informazioni in un formato conciso.` 
+        }
       ],
       tools: [
         {
-          type: "function",
-          function: {
-            name: "searchWeb",
-            description: "Search the web for information",
-            parameters: {
-              type: "object",
-              properties: {
-                query: {
-                  type: "string",
-                  description: "The search query to look up on the web"
-                }
-              },
-              required: ["query"]
-            }
-          }
+          type: "web_search"
         }
       ],
-      tool_choice: "auto"
+      tool_choice: {
+        type: "web_search"
+      },
+      temperature: 0.7
     });
-
-    // Verifica che response.choices[0].message.content non sia null prima di usare trim()
-    const content = response.choices[0].message.content;
-    return content ? content.trim() : "Ricerca informazioni aziendali non riuscita. Dati non disponibili.";
+    
+    // Estrai i risultati della ricerca
+    const toolCalls = response.choices[0].message.tool_calls;
+    let searchResults = "";
+    
+    if (toolCalls && toolCalls.length > 0) {
+      const searchArgs = JSON.parse(toolCalls[0].function.arguments);
+      searchResults = searchArgs.search_term;
+      
+      // Usa i risultati della ricerca per generare un riassunto
+      const summaryResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { 
+            role: "system", 
+            content: "Riassumi le seguenti informazioni sull'azienda in un breve paragrafo in italiano, focalizzandoti su: fatturato, numero di dipendenti, settore, prodotti/servizi principali." 
+          },
+          { 
+            role: "user", 
+            content: `Informazioni su ${companyName}: ${searchResults}` 
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 250
+      });
+      
+      return summaryResponse.choices[0].message.content.trim();
+    }
+    
+    return 'Informazioni non disponibili (ricerca non riuscita)';
   } catch (error) {
-    console.error('Errore nella ricerca delle informazioni aziendali:', error);
-    return "Ricerca informazioni aziendali non riuscita. Dati non disponibili.";
+    console.error('Errore nella ricerca di informazioni aziendali:', error);
+    return 'Errore nella ricerca di informazioni aziendali';
   }
 }
 
 // Funzione per inviare messaggi a Slack
-async function sendMessageToSlack(formData, qualificationText, companyInfo) {
+async function sendMessageToSlack(formData, qualificationText) {
   try {
     // Ottieni dominio di base per costruire gli URL
     let baseUrl;
@@ -145,6 +138,10 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
       throw new Error('Email mancante nei dati del form');
     }
 
+    // Cerca informazioni sull'azienda se disponibile
+    const companyInfo = await searchCompanyInfo(formData.company);
+    console.log('Informazioni aziendali trovate:', companyInfo);
+
     // Salva temporaneamente il testo in una variabile globale con ID univoco
     // Nota: in un ambiente di produzione reale, si dovrebbe usare un database
     // per memorizzare questi dati invece di variabili globali
@@ -152,14 +149,12 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
     global[`message_${messageId}`] = qualificationText;
 
     // Usa URL più brevi con solo l'ID del messaggio e l'email
-    const editUrl = `${baseUrl}/api/edit-message?id=${messageId}&email=${encodeURIComponent(formData.email)}`;
     const approveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}`;
 
     // Log per debug
     console.log('Email usata nell\'URL:', formData.email);
     console.log('ID messaggio generato:', messageId);
     console.log('Lunghezza messaggio originale:', qualificationText.length);
-    console.log('Edit URL generato:', editUrl);
     console.log('Approve URL generato:', approveUrl);
 
     // Blocchi per il messaggio Slack
@@ -199,16 +194,6 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
             type: "button",
             text: {
               type: "plain_text",
-              text: "✏️ Modifica testo",
-              emoji: true,
-            },
-            style: "primary",
-            url: editUrl,
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
               text: "✅ Approva e Registra",
               emoji: true,
             },
@@ -242,74 +227,6 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
   }
 }
 
-// Funzione per test locale - puoi chiamarla direttamente o esporla per test
-async function testApplication(testData = null) {
-  // Dati di test predefiniti se non forniti
-  const defaultTestData = {
-    firstname: "Mario",
-    lastname: "Rossi",
-    email: "test@example.com",
-    company: "Ferrero SpA",
-    project_type: "Sviluppo Web Application",
-    budget: "60k-80k",
-    message: "Vorremmo sviluppare una piattaforma web per gestire la nostra rete di vendita. Abbiamo bisogno di un'interfaccia moderna e intuitiva che funzioni bene su dispositivi mobili. Possiamo organizzare una call?"
-  };
-
-  // Usa i dati forniti o quelli predefiniti
-  const formData = testData || defaultTestData;
-  
-  console.log('=== TEST LOCALE AVVIATO ===');
-  console.log('Dati del form:', formData);
-
-  try {
-    // Genera il testo di qualifica e le informazioni aziendali in parallelo
-    const [qualificationText, companyInfo] = await Promise.all([
-      generateQualificationText(formData),
-      getCompanyInfo(formData.company)
-    ]);
-    
-    console.log('\n=== TESTO QUALIFICAZIONE ===');
-    console.log(qualificationText);
-    
-    console.log('\n=== INFORMAZIONI AZIENDALI ===');
-    console.log(companyInfo);
-
-    // Salva un ID per il test
-    const messageId = Date.now().toString();
-    global[`message_${messageId}`] = qualificationText;
-    
-    console.log('\n=== INFORMAZIONI ACCESSO ===');
-    console.log('Message ID:', messageId);
-    console.log('Indirizzi di test:');
-    console.log(`http://localhost:3000/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}`);
-    console.log(`http://localhost:3000/api/edit-message?id=${messageId}&email=${encodeURIComponent(formData.email)}`);
-    
-    console.log('\n=== TEST COMPLETATO ===');
-    
-    return {
-      qualificationText,
-      companyInfo,
-      messageId,
-      formData
-    };
-  } catch (error) {
-    console.error('Errore nel test:', error);
-    throw error;
-  }
-}
-
-// Esponi la funzione di test come endpoint API per una facile integrazione
-async function testHandler(req, res) {
-  try {
-    // Accetta dati personalizzati dal body o usa i predefiniti
-    const testData = req.body || null;
-    const result = await testApplication(testData);
-    return res.status(200).json(result);
-  } catch (error) {
-    console.error('Errore nell\'endpoint di test:', error);
-    return res.status(500).json({ error: error.message });
-  }
-}
 
 // Funzione principale
 export default async function handler(req, res) {
@@ -362,24 +279,13 @@ export default async function handler(req, res) {
     // Debug del valore company
     console.log('Company nei dati del form:', formData.company, 'Tipo:', typeof formData.company);
     
-    // Pre-processare il valore company per evitare problemi
-    // Se è undefined o null restituiamo stringa vuota, altrimenti convertiamo in stringa
-    const companyValue = formData.company === undefined || formData.company === null 
-      ? "" 
-      : String(formData.company);
-    
-    // Avvia in parallelo la generazione del testo e la ricerca delle informazioni aziendali
-    // Utilizziamo Promise.all per eseguire entrambe le chiamate contemporaneamente
-    const [qualificationText, companyInfo] = await Promise.all([
-      generateQualificationText(formData),
-      getCompanyInfo(companyValue)
-    ]);
+    // Avvia la generazione del testo
+    const qualificationText = await generateQualificationText(formData);
     
     console.log('Testo generato:', qualificationText);
-    console.log('Informazioni aziendali:', companyInfo);
 
-    // Invia il messaggio a Slack con i link di approvazione, modifica e le informazioni aziendali
-    await sendMessageToSlack(formData, qualificationText, companyInfo);
+    // Invia il messaggio a Slack con i link di approvazione
+    await sendMessageToSlack(formData, qualificationText);
 
     // Restituisci una risposta di successo
     return res.status(200).json({
@@ -392,5 +298,10 @@ export default async function handler(req, res) {
   }
 }
 
+// Funzione di test
+function testHandler(req, res) {
+  return res.status(200).json({ message: 'Test endpoint funzionante' });
+}
+
 // Esporta la funzione di test per utilizzo diretto da altri moduli
-export { testApplication }; 
+export { testHandler }; 
