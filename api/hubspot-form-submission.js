@@ -1,8 +1,4 @@
 const { OpenAI } = require('openai');
-const crypto = require('crypto');
-
-// Importa gli store condivisi
-const { approvedTokens, pendingMessages } = require('../utils/tokenStore');
 
 // Inizializza OpenAI
 const openai = new OpenAI({
@@ -46,8 +42,15 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
 }
 
 // Funzione per inviare messaggi a Slack
-async function sendMessageToSlack(message, approvalLink, editLink, formData) {
+async function sendMessageToSlack(formData, qualificationText) {
   try {
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : 'https://leadqualifier.vercel.app';
+
+    const editUrl = `${baseUrl}/api/edit?email=${encodeURIComponent(formData.email)}&originalMessage=${encodeURIComponent(qualificationText)}`;
+    const approveUrl = `${baseUrl}/api/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}`;
+
     const blocks = [
       {
         type: "section",
@@ -67,7 +70,7 @@ async function sendMessageToSlack(message, approvalLink, editLink, formData) {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "*Risposta Generata:*\n```" + message + "```",
+          text: "*Risposta Generata:*\n```" + qualificationText + "```",
         },
       },
       {
@@ -81,7 +84,7 @@ async function sendMessageToSlack(message, approvalLink, editLink, formData) {
               emoji: true,
             },
             style: "primary",
-            url: editLink,
+            url: editUrl,
           },
           {
             type: "button",
@@ -91,7 +94,7 @@ async function sendMessageToSlack(message, approvalLink, editLink, formData) {
               emoji: true,
             },
             style: "primary",
-            url: approvalLink,
+            url: approveUrl,
           },
         ],
       },
@@ -125,7 +128,7 @@ export default async function handler(req, res) {
   // Gestisci preflight CORS
   if (req.method === 'OPTIONS') {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
     return res.status(200).end();
   }
@@ -134,65 +137,6 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
 
   try {
-    // Gestisci la richiesta PUT per aggiornare il messaggio in sospeso
-    if (req.method === 'PUT') {
-      const { token } = req.query;
-      
-      if (!token || !pendingMessages.has(token)) {
-        return res.status(404).json({ error: 'Token non valido o scaduto' });
-      }
-      
-      if (approvedTokens.has(token)) {
-        return res.status(400).json({ error: 'Questo messaggio è già stato approvato' });
-      }
-      
-      // Ottieni il messaggio aggiornato dalla richiesta
-      let updatedData;
-      try {
-        updatedData = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-      } catch (e) {
-        return res.status(400).json({ error: 'Formato dati non valido' });
-      }
-      
-      if (!updatedData.message) {
-        return res.status(400).json({ error: 'Messaggio mancante' });
-      }
-      
-      // Aggiorna il messaggio in sospeso
-      const pendingData = pendingMessages.get(token);
-      pendingData.message = updatedData.message;
-      pendingMessages.set(token, pendingData);
-      
-      return res.status(200).json({ success: true, message: 'Messaggio aggiornato con successo' });
-    }
-
-    // Gestisci la richiesta GET per verificare lo stato del token
-    if (req.method === 'GET') {
-      // Controlla se è una richiesta di verifica per un token
-      const { token } = req.query;
-      
-      if (token) {
-        if (approvedTokens.has(token)) {
-          return res.status(200).json({ 
-            status: 'already_approved', 
-            message: 'Questa email è già stata approvata e inviata.' 
-          });
-        } else if (pendingMessages.has(token)) {
-          return res.status(200).json({ 
-            status: 'pending', 
-            message: pendingMessages.get(token) 
-          });
-        } else {
-          return res.status(404).json({ 
-            status: 'not_found', 
-            message: 'Token non valido o scaduto.' 
-          });
-        }
-      }
-      
-      return res.status(400).json({ error: 'Richiesta non valida' });
-    }
-
     // Verifica che ci siano i dati richiesti per POST
     if (req.method !== 'POST') {
       return res.status(405).json({ error: 'Metodo non consentito' });
@@ -226,27 +170,8 @@ export default async function handler(req, res) {
     const qualificationText = await generateQualificationText(formData);
     console.log('Testo generato:', qualificationText);
 
-    // Genera un token unico per questa richiesta
-    const token = crypto.randomBytes(16).toString('hex');
-    
-    // Salva il messaggio in sospeso
-    pendingMessages.set(token, {
-      email: formData.email,
-      message: qualificationText,
-      formData: formData,
-      timestamp: Date.now()
-    });
-
-    // Crea i link per l'approvazione e la modifica
-    const baseUrl = process.env.VERCEL_URL 
-      ? `https://${process.env.VERCEL_URL}` 
-      : 'https://leadqualifier.vercel.app';
-    
-    const approvalLink = `${baseUrl}/api/approve?token=${token}`;
-    const editLink = `${baseUrl}/api/edit?token=${token}`;
-
     // Invia il messaggio a Slack con i link di approvazione e modifica
-    await sendMessageToSlack(qualificationText, approvalLink, editLink, formData);
+    await sendMessageToSlack(formData, qualificationText);
 
     // Restituisci una risposta di successo
     return res.status(200).json({
