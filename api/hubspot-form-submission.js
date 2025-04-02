@@ -81,7 +81,7 @@ Includi SOLO queste tre righe di informazioni, nient'altro.
         { role: "user", content: prompt }
       ],
       temperature: 0.3,
-      max_tokens: 300
+      max_completation_tokens: 300
     });
 
     return response.choices[0].message.content.trim();
@@ -168,16 +168,6 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
       {
         type: "actions",
         elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "✏️ Modifica testo",
-              emoji: true,
-            },
-            style: "primary",
-            url: editUrl,
-          },
           {
             type: "button",
             text: {
