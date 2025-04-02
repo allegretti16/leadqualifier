@@ -80,7 +80,26 @@ Includi SOLO queste tre righe di informazioni, nient'altro.
         },
         { role: "user", content: prompt }
       ],
-      max_completion_tokens: 300
+      tools: [
+        {
+          type: "function",
+          function: {
+            name: "searchWeb",
+            description: "Search the web for information",
+            parameters: {
+              type: "object",
+              properties: {
+                query: {
+                  type: "string",
+                  description: "The search query to look up on the web"
+                }
+              },
+              required: ["query"]
+            }
+          }
+        }
+      ],
+      tool_choice: "auto"
     });
 
     return response.choices[0].message.content.trim();
@@ -171,12 +190,22 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
             type: "button",
             text: {
               type: "plain_text",
+              text: "✏️ Modifica testo",
+              emoji: true,
+            },
+            style: "primary",
+            url: editUrl,
+          },
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
               text: "✅ Approva e Registra",
               emoji: true,
             },
             style: "primary",
             url: approveUrl,
-          },
+          }
         ],
       },
     ];
@@ -204,6 +233,75 @@ async function sendMessageToSlack(formData, qualificationText, companyInfo) {
   }
 }
 
+// Funzione per test locale - puoi chiamarla direttamente o esporla per test
+async function testApplication(testData = null) {
+  // Dati di test predefiniti se non forniti
+  const defaultTestData = {
+    firstname: "Mario",
+    lastname: "Rossi",
+    email: "test@example.com",
+    company: "Ferrero SpA",
+    project_type: "Sviluppo Web Application",
+    budget: "60k-80k",
+    message: "Vorremmo sviluppare una piattaforma web per gestire la nostra rete di vendita. Abbiamo bisogno di un'interfaccia moderna e intuitiva che funzioni bene su dispositivi mobili. Possiamo organizzare una call?"
+  };
+
+  // Usa i dati forniti o quelli predefiniti
+  const formData = testData || defaultTestData;
+  
+  console.log('=== TEST LOCALE AVVIATO ===');
+  console.log('Dati del form:', formData);
+
+  try {
+    // Genera il testo di qualifica e le informazioni aziendali in parallelo
+    const [qualificationText, companyInfo] = await Promise.all([
+      generateQualificationText(formData),
+      getCompanyInfo(formData.company)
+    ]);
+    
+    console.log('\n=== TESTO QUALIFICAZIONE ===');
+    console.log(qualificationText);
+    
+    console.log('\n=== INFORMAZIONI AZIENDALI ===');
+    console.log(companyInfo);
+
+    // Salva un ID per il test
+    const messageId = Date.now().toString();
+    global[`message_${messageId}`] = qualificationText;
+    
+    console.log('\n=== INFORMAZIONI ACCESSO ===');
+    console.log('Message ID:', messageId);
+    console.log('Indirizzi di test:');
+    console.log(`http://localhost:3000/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}`);
+    console.log(`http://localhost:3000/api/edit-message?id=${messageId}&email=${encodeURIComponent(formData.email)}`);
+    
+    console.log('\n=== TEST COMPLETATO ===');
+    
+    return {
+      qualificationText,
+      companyInfo,
+      messageId,
+      formData
+    };
+  } catch (error) {
+    console.error('Errore nel test:', error);
+    throw error;
+  }
+}
+
+// Esponi la funzione di test come endpoint API per una facile integrazione
+async function testHandler(req, res) {
+  try {
+    // Accetta dati personalizzati dal body o usa i predefiniti
+    const testData = req.body || null;
+    const result = await testApplication(testData);
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error('Errore nell\'endpoint di test:', error);
+    return res.status(500).json({ error: error.message });
+  }
+}
+
 // Funzione principale
 export default async function handler(req, res) {
   // Gestisci preflight CORS
@@ -216,6 +314,11 @@ export default async function handler(req, res) {
 
   // Abilita CORS per tutti gli altri metodi
   res.setHeader('Access-Control-Allow-Origin', '*');
+
+  // Endpoint di test speciale
+  if (req.query.test === 'true') {
+    return testHandler(req, res);
+  }
 
   try {
     // Verifica che ci siano i dati richiesti per POST
@@ -269,4 +372,7 @@ export default async function handler(req, res) {
     console.error('Errore nella gestione della richiesta:', error);
     return res.status(500).json({ error: error.message });
   }
-} 
+}
+
+// Esporta la funzione di test per utilizzo diretto da altri moduli
+export { testApplication }; 
