@@ -1,10 +1,8 @@
 const { OpenAI } = require('openai');
 const crypto = require('crypto');
 
-// Archivio temporaneo per tenere traccia dei link approvati
-// Nota: su Vercel questo sarà resettato ad ogni deploy
-const approvedTokens = new Set();
-const pendingMessages = new Map();
+// Importa gli store condivisi
+const { approvedTokens, pendingMessages } = require('../utils/tokenStore');
 
 // Inizializza OpenAI
 const openai = new OpenAI({
@@ -48,21 +46,28 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
 }
 
 // Funzione per inviare messaggi a Slack
-async function sendMessageToSlack(message, approvalLink, editLink, email) {
+async function sendMessageToSlack(message, approvalLink, editLink, formData) {
   try {
     const blocks = [
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: `*Nuovo lead da qualificare:* ${email}`,
+          text: `*Nuovo lead da qualificare*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}`,
         },
       },
       {
         type: "section",
         text: {
           type: "mrkdwn",
-          text: "```" + message + "```",
+          text: "*Messaggio originale:*\n" + formData.message,
+        },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "*Risposta Generata:*\n```" + message + "```",
         },
       },
       {
@@ -82,7 +87,7 @@ async function sendMessageToSlack(message, approvalLink, editLink, email) {
             type: "button",
             text: {
               type: "plain_text",
-              text: "Approva e Invia",
+              text: "Approva e Registra",
               emoji: true,
             },
             style: "primary",
@@ -241,7 +246,7 @@ export default async function handler(req, res) {
     const editLink = `${baseUrl}/api/edit?token=${token}`;
 
     // Invia il messaggio a Slack con i link di approvazione e modifica
-    await sendMessageToSlack(qualificationText, approvalLink, editLink, formData.email);
+    await sendMessageToSlack(qualificationText, approvalLink, editLink, formData);
 
     // Restituisci una risposta di successo
     return res.status(200).json({

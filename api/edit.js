@@ -1,7 +1,5 @@
-// Questo array deve essere sincronizzato con lo stesso array in hubspot-form-submission.js
-// Nota: su Vercel sarà resettato ad ogni deploy se non usi un database
-const approvedTokens = new Set();
-const pendingMessages = new Map();
+// Importa gli store condivisi
+const { approvedTokens, pendingMessages } = require('../utils/tokenStore');
 
 export default async function handler(req, res) {
   // Abilita CORS
