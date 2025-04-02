@@ -44,21 +44,24 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
 // Funzione per ricercare informazioni sull'azienda
 async function getCompanyInfo(companyName) {
   try {
-    // Debug log per vedere esattamente cosa viene passato
+    // Debug log per cosa riceviamo
     console.log('getCompanyInfo ricevuto:', companyName, 'Tipo:', typeof companyName);
     
-    // Controllo più robusto per verificare se companyName è null, undefined o stringa vuota
-    if (companyName === null || companyName === undefined || typeof companyName !== 'string' || companyName.trim() === '') {
+    // Controllo vuoto - dato che companyName è già stato convertito in stringa prima della chiamata
+    // possiamo usare trim() senza rischio
+    if (!companyName || companyName.trim() === '') {
       return "Nessuna informazione disponibile (nome azienda non fornito)";
     }
 
-    console.log('Ricerca informazioni per azienda:', companyName);
+    // Usiamo la versione trimmed del nome azienda per la ricerca
+    const trimmedName = companyName.trim();
+    console.log('Ricerca informazioni per azienda:', trimmedName);
     
     const prompt = `
-Sei un assistente che deve cercare informazioni su Google riguardo a "${companyName}".
+Sei un assistente che deve cercare informazioni su Google riguardo a "${trimmedName}".
 Devi fare una ricerca su Google per trovare:
 
-1. Il fatturato dell'azienda (cerca specificamente "fatturato ${companyName}" o "revenue ${companyName}")
+1. Il fatturato dell'azienda (cerca specificamente "fatturato ${trimmedName}" o "revenue ${trimmedName}")
 2. Il numero di dipendenti dell'azienda
 3. Il settore in cui opera l'azienda
 
@@ -66,7 +69,7 @@ Cerca questi dati sul web, idealmente da fonti come il sito ufficiale dell'azien
 Se l'azienda è italiana, cerca il fatturato in euro.
 
 Dopo aver effettuato la ricerca, formatta la risposta come segue:
-**${companyName}**
+**${trimmedName}**
 - Fatturato: [importo specifico che hai trovato, con l'anno se disponibile] 
 - Dipendenti: [numero specifico o range]
 - Settore: [settore principale]
@@ -354,19 +357,20 @@ export default async function handler(req, res) {
 
     console.log('Richiesta ricevuta per:', formData.email);
     
-    // Aggiungo log per debug del valore di company
-    console.log('Valore di company prima della chiamata:', formData.company, 'Tipo:', typeof formData.company);
-
-    // Assicuriamoci che company sia sempre una stringa se presente, altrimenti impostiamo su stringa vuota
-    const companyName = formData.company !== undefined && formData.company !== null 
-      ? String(formData.company) 
-      : "";
-
+    // Debug del valore company
+    console.log('Company nei dati del form:', formData.company, 'Tipo:', typeof formData.company);
+    
+    // Pre-processare il valore company per evitare problemi
+    // Se è undefined o null restituiamo stringa vuota, altrimenti convertiamo in stringa
+    const companyValue = formData.company === undefined || formData.company === null 
+      ? "" 
+      : String(formData.company);
+    
     // Avvia in parallelo la generazione del testo e la ricerca delle informazioni aziendali
     // Utilizziamo Promise.all per eseguire entrambe le chiamate contemporaneamente
     const [qualificationText, companyInfo] = await Promise.all([
       generateQualificationText(formData),
-      getCompanyInfo(companyName)
+      getCompanyInfo(companyValue)
     ]);
     
     console.log('Testo generato:', qualificationText);
