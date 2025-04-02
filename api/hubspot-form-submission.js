@@ -52,120 +52,6 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
   }
 }
 
-// Funzione per cercare informazioni sull'azienda sul web
-async function searchCompanyInfo(companyName) {
-  try {
-    if (!companyName) {
-      console.log('Nome azienda non fornito, ricerca web saltata');
-      return 'Informazioni non disponibili (nome azienda non fornito)';
-    }
-
-    console.log('Ricerca informazioni per azienda:', companyName);
-    
-    // Prima chiamata: utilizzo direttamente web_search come funzione
-    const response = await openai.chat.completions.create({
-      model: "gpt-4o",
-      messages: [
-        { 
-          role: "system", 
-          content: "Sei un assistente che aiuta a raccogliere informazioni sulle aziende. Estrai e riassumi in italiano i dati più rilevanti." 
-        },
-        { 
-          role: "user", 
-          content: `Cerca informazioni su questa azienda: ${companyName}. Concentrati su: fatturato, numero di dipendenti, settore, prodotti/servizi principali. Presenta le informazioni in un formato conciso.` 
-        }
-      ],
-      tools: [
-        {
-          type: "function",
-          function: {
-            name: "web_search",
-            description: "Cerca informazioni sul web",
-            parameters: {
-              type: "object",
-              properties: {
-                search_term: {
-                  type: "string",
-                  description: "Il termine di ricerca"
-                }
-              },
-              required: ["search_term"]
-            }
-          }
-        }
-      ],
-      tool_choice: {
-        type: "function",
-        function: {
-          name: "web_search"
-        }
-      },
-      temperature: 0.7
-    });
-    
-    // Estrai i risultati della ricerca
-    const toolCalls = response.choices[0].message.tool_calls;
-    let searchResults = "";
-    
-    if (toolCalls && toolCalls.length > 0) {
-      const searchArgs = JSON.parse(toolCalls[0].function.arguments);
-      searchResults = searchArgs.search_term;
-      
-      // Seconda chiamata: usa i risultati per generare un riassunto
-      const summaryResponse = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { 
-            role: "system", 
-            content: "Riassumi le seguenti informazioni sull'azienda in un breve paragrafo in italiano, focalizzandoti su: fatturato, numero di dipendenti, settore, prodotti/servizi principali." 
-          },
-          { 
-            role: "user", 
-            content: `Informazioni su ${companyName}: ${searchResults}` 
-          },
-          {
-            role: "assistant",
-            content: "Ecco un riassunto delle informazioni aziendali richieste:"
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 250
-      });
-      
-      return summaryResponse.choices[0].message.content.trim();
-    }
-    
-    return 'Informazioni non disponibili (ricerca non riuscita)';
-  } catch (error) {
-    console.error('Errore nella ricerca di informazioni aziendali:', error);
-    
-    // Fallback: tenta una ricerca più semplice senza web_search
-    try {
-      console.log('Tentativo di ricerca alternativa...');
-      const fallbackResponse = await openai.chat.completions.create({
-        model: "gpt-4o-mini",
-        messages: [
-          { 
-            role: "system", 
-            content: "Sei un assistente che conosce informazioni generali sulle aziende più note. Fornisci un breve riassunto di ciò che sai su questa azienda, specificando se le informazioni potrebbero non essere aggiornate." 
-          },
-          { 
-            role: "user", 
-            content: `Cosa sai dell'azienda ${companyName}? Concentrati su: fatturato, numero di dipendenti, settore, prodotti/servizi principali.` 
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 250
-      });
-      
-      return fallbackResponse.choices[0].message.content.trim() + "\n\n(Nota: queste informazioni potrebbero non essere aggiornate o complete)";
-    } catch (fallbackError) {
-      console.error('Anche la ricerca alternativa è fallita:', fallbackError);
-      return 'Errore nella ricerca di informazioni aziendali';
-    }
-  }
-}
-
 // Funzione per inviare messaggi a Slack
 async function sendMessageToSlack(formData, qualificationText) {
   try {
@@ -180,9 +66,7 @@ async function sendMessageToSlack(formData, qualificationText) {
       throw new Error('Email mancante nei dati del form');
     }
 
-    // Cerca informazioni sull'azienda se disponibile
-    const companyInfo = await searchCompanyInfo(formData.company);
-    console.log('Informazioni aziendali trovate:', companyInfo);
+
 
     // Genera un ID univoco per il messaggio
     const messageId = Date.now().toString();
@@ -202,13 +86,6 @@ async function sendMessageToSlack(formData, qualificationText) {
         text: {
           type: "mrkdwn",
           text: `*Nuovo lead da qualificare*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}`,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Informazioni aziendali:*\n" + companyInfo,
         },
       },
       {
