@@ -66,13 +66,14 @@ async function sendMessageToSlack(formData, qualificationText) {
       throw new Error('Email mancante nei dati del form');
     }
 
-
-
     // Genera un ID univoco per il messaggio
     const messageId = Date.now().toString();
 
     // Crea l'URL della pagina intermedia che salverà il messaggio in localStorage
     const saveUrl = `${baseUrl}/api/save-message?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&skipHubspot=true`;
+    
+    // Crea l'URL per inviare direttamente l'email
+    const sendEmailUrl = `${baseUrl}/api/send-direct-email?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}`;
 
     // Log per debug
     console.log('Email usata nell\'URL:', formData.email);
@@ -114,6 +115,16 @@ async function sendMessageToSlack(formData, qualificationText) {
             },
             style: "primary",
             url: saveUrl,
+          },
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "📩 Invia Email Diretta",
+              emoji: true,
+            },
+            style: "danger",
+            url: sendEmailUrl,
           }
         ],
       }
