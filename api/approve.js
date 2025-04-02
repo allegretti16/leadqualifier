@@ -31,23 +31,132 @@ async function sendApprovalConfirmationToSlack(email) {
 }
 
 export default async function handler(req, res) {
+  // Log della richiesta per debug
+  console.log('Richiesta ricevuta su /api/approve');
+  console.log('Query params:', req.query);
+  console.log('Method:', req.method);
+  console.log('Headers:', JSON.stringify(req.headers, null, 2));
+  
   // Abilita CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
+  // Gestisci preflight CORS
+  if (req.method === 'OPTIONS') {
+    return res.status(200).end();
+  }
+
   try {
+    // Estraggo i parametri dalla query
     const { email, message } = req.query;
     
+    console.log('Parametri ricevuti:');
+    console.log('- email:', typeof email, email ? 'presente' : 'mancante');
+    console.log('- message:', typeof message, message ? 'presente' : 'mancante', message ? `(lunghezza: ${message.length})` : '');
+    
+    // Verifico che i parametri siano presenti
     if (!email || !message) {
-      return res.status(400).json({ error: 'Email e messaggio sono richiesti' });
+      console.error('Parametri mancanti:', { email, message });
+      
+      // Restituisco una pagina HTML di errore invece di JSON
+      res.setHeader('Content-Type', 'text/html');
+      return res.status(400).send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Errore Parametri</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f5f5f5;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+              }
+              .container {
+                background-color: white;
+                padding: 30px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+                max-width: 600px;
+                text-align: center;
+              }
+              h1 {
+                color: #e74c3c;
+                margin-bottom: 20px;
+              }
+              p {
+                color: #333;
+                margin-bottom: 15px;
+                line-height: 1.5;
+              }
+              .details {
+                background-color: #f9f9f9;
+                padding: 15px;
+                border-radius: 4px;
+                margin: 20px 0;
+                text-align: left;
+                overflow-wrap: break-word;
+              }
+              .button {
+                display: inline-block;
+                margin-top: 20px;
+                padding: 10px 20px;
+                background-color: #3498db;
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Errore nei Parametri</h1>
+              <p>Non è possibile approvare l'email perché mancano alcuni parametri necessari.</p>
+              
+              <div class="details">
+                <p><strong>Parametri mancanti:</strong></p>
+                ${!email ? '<p>• Email del destinatario</p>' : ''}
+                ${!message ? '<p>• Messaggio da inviare</p>' : ''}
+                
+                <p><strong>Informazioni di debug:</strong></p>
+                <p>URL: ${req.url}</p>
+                <p>Query: ${JSON.stringify(req.query)}</p>
+              </div>
+              
+              <p>Prova a tornare indietro e cliccare nuovamente sul pulsante "Approva e Registra" nel messaggio di Slack.</p>
+              <a href="javascript:window.close()" class="button">Chiudi questa finestra</a>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+
+    // Decodifico il messaggio se necessario
+    let decodedMessage = message;
+    if (typeof decodedMessage === 'string') {
+      try {
+        // Provo a decodificare il messaggio se sembra essere codificato
+        if (decodedMessage.indexOf('%') >= 0) {
+          decodedMessage = decodeURIComponent(decodedMessage);
+        }
+      } catch (decodeError) {
+        console.error('Errore decodifica messaggio:', decodeError);
+        // In caso di errore, mantengo il messaggio originale
+      }
     }
 
     console.log('Approvazione ricevuta per:', email);
-    console.log('Messaggio da inviare:', message);
+    console.log('Messaggio da inviare (lunghezza):', decodedMessage.length);
 
     // Invia l'email tramite HubSpot (crea un'attività)
-    await sendHubSpotEmail(email, message);
+    await sendHubSpotEmail(email, decodedMessage);
     
     // Invia messaggio di conferma a Slack
     await sendApprovalConfirmationToSlack(email);
@@ -121,7 +230,7 @@ export default async function handler(req, res) {
             <p>L'email è stata approvata e registrata con successo per <strong>${email}</strong>.</p>
             <div class="email-details">
               <p><strong>Messaggio registrato:</strong></p>
-              <p>${message.replace(/\n/g, '<br>')}</p>
+              <p>${decodedMessage.replace(/\n/g, '<br>')}</p>
             </div>
             <a href="javascript:window.close()" class="button">Chiudi questa finestra</a>
           </div>
@@ -130,7 +239,79 @@ export default async function handler(req, res) {
     `);
   } catch (error) {
     console.error('Errore durante l\'approvazione:', error);
-    res.status(500).json({ error: 'Errore durante l\'invio dell\'email' });
+    
+    // Restituisco una pagina HTML di errore
+    res.setHeader('Content-Type', 'text/html');
+    res.status(500).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Errore</title>
+          <meta charset="utf-8">
+          <meta name="viewport" content="width=device-width, initial-scale=1">
+          <style>
+            body {
+              font-family: Arial, sans-serif;
+              margin: 0;
+              padding: 20px;
+              background-color: #f5f5f5;
+              display: flex;
+              justify-content: center;
+              align-items: center;
+              height: 100vh;
+            }
+            .container {
+              background-color: white;
+              padding: 30px;
+              border-radius: 8px;
+              box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+              max-width: 600px;
+              text-align: center;
+            }
+            h1 {
+              color: #e74c3c;
+              margin-bottom: 20px;
+            }
+            p {
+              color: #333;
+              margin-bottom: 15px;
+            }
+            .error-details {
+              background-color: #f9f9f9;
+              padding: 15px;
+              border-radius: 4px;
+              margin: 20px 0;
+              text-align: left;
+              font-family: monospace;
+              font-size: 14px;
+              overflow-wrap: break-word;
+            }
+            .button {
+              display: inline-block;
+              margin-top: 20px;
+              padding: 10px 20px;
+              background-color: #3498db;
+              color: white;
+              text-decoration: none;
+              border-radius: 4px;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>Si è verificato un errore</h1>
+            <p>Non è stato possibile approvare l'email a causa di un errore interno.</p>
+            
+            <div class="error-details">
+              <p><strong>Dettagli errore:</strong> ${error.message}</p>
+            </div>
+            
+            <p>Prova a tornare indietro e riprovare. Se il problema persiste, contatta l'amministratore.</p>
+            <a href="javascript:window.close()" class="button">Chiudi questa finestra</a>
+          </div>
+        </body>
+      </html>
+    `);
   }
 }
 
