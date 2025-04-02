@@ -41,8 +41,58 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
   }
 }
 
+// Funzione per ricercare informazioni sull'azienda
+async function getCompanyInfo(companyName) {
+  try {
+    if (!companyName || companyName.trim() === '') {
+      return "Nessuna informazione disponibile (nome azienda non fornito)";
+    }
+
+    console.log('Ricerca informazioni per azienda:', companyName);
+    
+    const prompt = `
+Sei un assistente che deve cercare informazioni su Google riguardo a "${companyName}".
+Devi fare una ricerca su Google per trovare:
+
+1. Il fatturato dell'azienda (cerca specificamente "fatturato ${companyName}" o "revenue ${companyName}")
+2. Il numero di dipendenti dell'azienda
+3. Il settore in cui opera l'azienda
+
+Cerca questi dati sul web, idealmente da fonti come il sito ufficiale dell'azienda, LinkedIn, registri aziendali, o articoli finanziari.
+Se l'azienda è italiana, cerca il fatturato in euro.
+
+Dopo aver effettuato la ricerca, formatta la risposta come segue:
+**${companyName}**
+- Fatturato: [importo specifico che hai trovato, con l'anno se disponibile] 
+- Dipendenti: [numero specifico o range]
+- Settore: [settore principale]
+
+Se non riesci a trovare informazioni specifiche su qualcuno di questi punti, scrivi "dati non disponibili".
+Includi SOLO queste tre righe di informazioni, nient'altro.
+`;
+
+    const response = await openai.chat.completions.create({
+      model: "gpt-o3-mini",
+      messages: [
+        {
+          role: "system",
+          content: "Sei un assistente esperto nella ricerca di informazioni aziendali su Google. Devi cercare dati fattuali sulle aziende dal web, in particolare fatturato, dipendenti e settore. Se non riesci a trovare dati esatti, devi indicarlo chiaramente."
+        },
+        { role: "user", content: prompt }
+      ],
+      temperature: 0.3,
+      max_tokens: 300
+    });
+
+    return response.choices[0].message.content.trim();
+  } catch (error) {
+    console.error('Errore nella ricerca delle informazioni aziendali:', error);
+    return "Ricerca informazioni aziendali non riuscita. Dati non disponibili.";
+  }
+}
+
 // Funzione per inviare messaggi a Slack
-async function sendMessageToSlack(formData, qualificationText) {
+async function sendMessageToSlack(formData, qualificationText, companyInfo) {
   try {
     // Ottieni dominio di base per costruire gli URL
     let baseUrl;
@@ -71,7 +121,7 @@ async function sendMessageToSlack(formData, qualificationText) {
     // Creo un approccio più robusto usando parametri brevi
     // Invece di passare tutto il messaggio nell'URL, passiamo solo l'identificativo dell'email
     // che verrà poi usato per recuperare il messaggio completo
-    const editUrl = `${baseUrl}/api/edit?email=${encodeURIComponent(formData.email)}&originalMessage=${encodeURIComponent(qualificationText)}`;
+    const editUrl = `${baseUrl}/api/edit-message?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}`;
     const approveUrl = `${baseUrl}/api/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}`;
 
     // Log per debug
@@ -87,6 +137,13 @@ async function sendMessageToSlack(formData, qualificationText) {
         text: {
           type: "mrkdwn",
           text: `*Nuovo lead da qualificare*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}`,
+        },
+      },
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "*Informazioni aziendali:*\n" + companyInfo,
         },
       },
       {
@@ -110,7 +167,7 @@ async function sendMessageToSlack(formData, qualificationText) {
             type: "button",
             text: {
               type: "plain_text",
-              text: "Modifica",
+              text: "✏️ Modifica testo",
               emoji: true,
             },
             style: "primary",
@@ -120,7 +177,7 @@ async function sendMessageToSlack(formData, qualificationText) {
             type: "button",
             text: {
               type: "plain_text",
-              text: "Approva e Registra",
+              text: "✅ Approva e Registra",
               emoji: true,
             },
             style: "primary",
@@ -196,12 +253,18 @@ export default async function handler(req, res) {
 
     console.log('Richiesta ricevuta per:', formData.email);
 
-    // Genera il testo di qualifica utilizzando OpenAI
-    const qualificationText = await generateQualificationText(formData);
+    // Avvia in parallelo la generazione del testo e la ricerca delle informazioni aziendali
+    // Utilizziamo Promise.all per eseguire entrambe le chiamate contemporaneamente
+    const [qualificationText, companyInfo] = await Promise.all([
+      generateQualificationText(formData),
+      getCompanyInfo(formData.company)
+    ]);
+    
     console.log('Testo generato:', qualificationText);
+    console.log('Informazioni aziendali:', companyInfo);
 
-    // Invia il messaggio a Slack con i link di approvazione e modifica
-    await sendMessageToSlack(formData, qualificationText);
+    // Invia il messaggio a Slack con i link di approvazione, modifica e le informazioni aziendali
+    await sendMessageToSlack(formData, qualificationText, companyInfo);
 
     // Restituisci una risposta di successo
     return res.status(200).json({
