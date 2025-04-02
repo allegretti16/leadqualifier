@@ -159,20 +159,7 @@ async function searchCompanyInfo(companyName) {
 async function sendMessageToSlack(formData, qualificationText) {
   try {
     // Ottieni dominio di base per costruire gli URL
-    let baseUrl;
-    
-    // In locale, usa localhost
-    if (process.env.NODE_ENV === 'development') {
-      baseUrl = 'http://localhost:3000';
-    } 
-    // In produzione, usa l'URL di Vercel o quello personalizzato
-    else if (process.env.VERCEL_URL) {
-      baseUrl = `https://${process.env.VERCEL_URL}`;
-    } 
-    // Fallback all'URL hardcoded se non ci sono alternative
-    else {
-      baseUrl = 'https://leadqualifier.vercel.app';
-    }
+    const baseUrl = getBaseUrl();
     
     console.log('URL base utilizzato:', baseUrl);
 
@@ -186,20 +173,16 @@ async function sendMessageToSlack(formData, qualificationText) {
     const companyInfo = await searchCompanyInfo(formData.company);
     console.log('Informazioni aziendali trovate:', companyInfo);
 
-    // Salva temporaneamente il testo in una variabile globale con ID univoco
-    // Nota: in un ambiente di produzione reale, si dovrebbe usare un database
-    // per memorizzare questi dati invece di variabili globali
+    // Genera un ID univoco per il messaggio
     const messageId = Date.now().toString();
-    global[`message_${messageId}`] = qualificationText;
 
-    // Usa URL più brevi con solo l'ID del messaggio e l'email
-    const approveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=true`;
+    // Crea l'URL della pagina intermedia che salverà il messaggio in localStorage
+    const saveUrl = `${baseUrl}/api/save-message?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&skipHubspot=true`;
 
     // Log per debug
     console.log('Email usata nell\'URL:', formData.email);
     console.log('ID messaggio generato:', messageId);
     console.log('Lunghezza messaggio originale:', qualificationText.length);
-    console.log('Approve URL generato:', approveUrl);
 
     // Blocchi per il messaggio Slack
     const blocks = [
@@ -242,10 +225,10 @@ async function sendMessageToSlack(formData, qualificationText) {
               emoji: true,
             },
             style: "primary",
-            url: approveUrl,
+            url: saveUrl,
           }
         ],
-      },
+      }
     ];
 
     const result = await fetch("https://slack.com/api/chat.postMessage", {
@@ -270,7 +253,6 @@ async function sendMessageToSlack(formData, qualificationText) {
     throw error;
   }
 }
-
 
 // Funzione principale
 export default async function handler(req, res) {
