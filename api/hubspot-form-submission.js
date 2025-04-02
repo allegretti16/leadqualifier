@@ -44,7 +44,11 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
 // Funzione per ricercare informazioni sull'azienda
 async function getCompanyInfo(companyName) {
   try {
-    if (!companyName || companyName.trim() === '') {
+    // Debug log per vedere esattamente cosa viene passato
+    console.log('getCompanyInfo ricevuto:', companyName, 'Tipo:', typeof companyName);
+    
+    // Controllo più robusto per verificare se companyName è null, undefined o stringa vuota
+    if (companyName === null || companyName === undefined || typeof companyName !== 'string' || companyName.trim() === '') {
       return "Nessuna informazione disponibile (nome azienda non fornito)";
     }
 
@@ -349,12 +353,20 @@ export default async function handler(req, res) {
     }
 
     console.log('Richiesta ricevuta per:', formData.email);
+    
+    // Aggiungo log per debug del valore di company
+    console.log('Valore di company prima della chiamata:', formData.company, 'Tipo:', typeof formData.company);
+
+    // Assicuriamoci che company sia sempre una stringa se presente, altrimenti impostiamo su stringa vuota
+    const companyName = formData.company !== undefined && formData.company !== null 
+      ? String(formData.company) 
+      : "";
 
     // Avvia in parallelo la generazione del testo e la ricerca delle informazioni aziendali
     // Utilizziamo Promise.all per eseguire entrambe le chiamate contemporaneamente
     const [qualificationText, companyInfo] = await Promise.all([
       generateQualificationText(formData),
-      getCompanyInfo(formData.company)
+      getCompanyInfo(companyName)
     ]);
     
     console.log('Testo generato:', qualificationText);
