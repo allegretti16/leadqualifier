@@ -1,105 +1,15 @@
 const { OpenAI } = require('openai');
+const crypto = require('crypto');
 
+// Archivio temporaneo per tenere traccia dei link approvati
+// Nota: su Vercel questo sarà resettato ad ogni deploy
+const approvedTokens = new Set();
+const pendingMessages = new Map();
+
+// Inizializza OpenAI
 const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY
+  apiKey: process.env.OPENAI_API_KEY,
 });
-
-export default async function handler(req, res) {
-  // Abilita CORS
-  res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
-  // Gestisci la richiesta OPTIONS
-  if (req.method === 'OPTIONS') {
-    res.status(200).end();
-    return;
-  }
-
-  // Verifica che sia una richiesta POST
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  try {
-    console.log('Headers della richiesta:', JSON.stringify(req.headers, null, 2));
-    
-    // Gestione speciale per richieste no-cors
-    let formData;
-    if (req.headers['content-type'] === 'text/plain' || !req.body || Object.keys(req.body).length === 0) {
-      try {
-        // Tenta di leggere il body della request come stringa
-        const rawBody = JSON.stringify(req.body);
-        console.log('Raw body ricevuto:', rawBody);
-        
-        try {
-          formData = JSON.parse(rawBody);
-        } catch (e) {
-          console.log('Errore nel parsing del JSON:', e);
-          // Se il JSON parsing fallisce, cerca di estrarre i dati manualmente
-          formData = {};
-        }
-      } catch (error) {
-        console.error('Errore nella lettura del body:', error);
-        formData = {};
-      }
-    } else {
-      formData = req.body;
-    }
-    
-    console.log('Dati del form processati:', JSON.stringify(formData, null, 2));
-    
-    // Verifica le variabili d'ambiente
-    const requiredEnvVars = [
-      'OPENAI_API_KEY',
-      'SLACK_BOT_TOKEN',
-      'SLACK_CHANNEL_ID',
-      'HUBSPOT_API_KEY'
-    ];
-
-    const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
-    if (missingEnvVars.length > 0) {
-      console.error('Variabili d\'ambiente mancanti:', missingEnvVars);
-      return res.status(500).json({ 
-        error: 'Configurazione server incompleta',
-        missingVars: missingEnvVars
-      });
-    }
-    
-    if (!formData || !formData.email) {
-      console.error('Dati del form mancanti o invalidi:', formData);
-      return res.status(400).json({ 
-        error: 'Dati del form mancanti o invalidi',
-        receivedBody: formData
-      });
-    }
-
-    // Genera una risposta con OpenAI
-    console.log('Inizio generazione testo...');
-    const qualificationText = await generateQualificationText(formData);
-    console.log('Risposta generata:', qualificationText);
-
-    // Invia su Slack
-    console.log('Inizio invio su Slack...');
-    await sendSlackMessage(formData, qualificationText);
-    console.log('Messaggio inviato su Slack');
-
-    // Non inviamo più automaticamente l'email a HubSpot
-    // L'email verrà inviata solo dopo l'approvazione tramite l'endpoint /api/approve
-
-    res.status(200).json({ success: true });
-  } catch (error) {
-    console.error('Errore dettagliato:', {
-      message: error.message,
-      stack: error.stack,
-      response: error.response?.data
-    });
-    res.status(500).json({ 
-      error: error.message,
-      details: error.response?.data || 'Nessun dettaglio aggiuntivo'
-    });
-  }
-}
 
 // funzione per generare il testo di qualifica
 async function generateQualificationText(formData) {
@@ -108,7 +18,7 @@ async function generateQualificationText(formData) {
     
     const prompt = `
 Sei il Sales Manager di Extendi, il tuo nome è Dario Calamandrei. Extendi S.r.l. è un'azienda italiana che offre soluzioni tecnologiche complesse, applicazioni web e strumenti di analisi dei big data con un design centrato sull'utente. Fondata nel 2005, Extendi ha oltre 15 anni di esperienza e più di 30 sviluppatori specializzati in Ruby on Rails e React/React Native. Ha anche un team di UX/UI desingers. La loro profonda conoscenza di strumenti moderni come Gatsby e Next.js li rende una delle migliori agenzie in Europa per lo sviluppo di applicazioni mission-critical. Utilizzano l'architettura Jamstack, che si basa sui principi del pre-rendering dell'intero front-end e del disaccoppiamento del front-end dal back-end. Questo approccio consente di gestire picchi di traffico, ottimizzare l'SEO, migliorare le conversioni dell'e-commerce e garantire un uptime elevato. Inoltre, Extendi si impegna a consegnare progetti puntuali e di alta qualità, collaborando con grandi aziende e aiutando startup a crescere. Per ulteriori informazioni, puoi visitare il loro sito web. Il tuo obiettivo è qualificare i clienti che scrivono alla mail hello@extendi.it, rispondendo alla mail con una serie di domande pertinenti alle esigenze specifiche del cliente ma anche finalizzate a comprendere il budget che ha a disposizione qualora non sia specificato o se sia meno di 30k capire quanto effettivamente sia al disotto di 30k€
-
+  
 Ecco i dettagli del lead:
 Nome: ${formData.firstname} ${formData.lastname}
 Email: ${formData.email}
@@ -137,33 +47,209 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
   }
 }
 
-// funzione per inviare messaggi su Slack
-async function sendSlackMessage(formData, qualificationText) {
+// Funzione per inviare messaggi a Slack
+async function sendMessageToSlack(message, approvalLink, editLink, email) {
   try {
-    console.log('Invio messaggio su Slack per:', formData.email);
-    
-    const message = {
-      channel: process.env.SLACK_CHANNEL_ID,
-      text: `*Nuovo Lead Ricevuto*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}\n\n*Messaggio:*\n${formData.message}\n\n*Risposta Generata:*\n${qualificationText}\n\n<https://leadqualifier.vercel.app/api/approve?email=${encodeURIComponent(formData.email)}&message=${encodeURIComponent(qualificationText)}|Approva e Invia>`
-    };
-
-    const response = await fetch('https://slack.com/api/chat.postMessage', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-        'Content-Type': 'application/json'
+    const blocks = [
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: `*Nuovo lead da qualificare:* ${email}`,
+        },
       },
-      body: JSON.stringify(message)
+      {
+        type: "section",
+        text: {
+          type: "mrkdwn",
+          text: "```" + message + "```",
+        },
+      },
+      {
+        type: "actions",
+        elements: [
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Modifica",
+              emoji: true,
+            },
+            style: "primary",
+            url: editLink,
+          },
+          {
+            type: "button",
+            text: {
+              type: "plain_text",
+              text: "Approva e Invia",
+              emoji: true,
+            },
+            style: "primary",
+            url: approvalLink,
+          },
+        ],
+      },
+    ];
+
+    const result = await fetch("https://slack.com/api/chat.postMessage", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
+      },
+      body: JSON.stringify({
+        channel: process.env.SLACK_CHANNEL_ID,
+        blocks: blocks,
+      }),
     });
 
-    const data = await response.json();
-    if (!data.ok) {
-      throw new Error(`Errore Slack: ${data.error}`);
+    if (!result.ok) {
+      throw new Error(`Errore Slack: ${result.statusText}`);
     }
 
-    console.log('Messaggio Slack inviato con successo');
+    return result.json();
   } catch (error) {
-    console.error('Errore nell\'invio del messaggio Slack:', error);
+    console.error("Errore nell'invio a Slack:", error);
     throw error;
+  }
+}
+
+// Funzione principale
+export default async function handler(req, res) {
+  // Gestisci preflight CORS
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    return res.status(200).end();
+  }
+
+  // Abilita CORS per tutti gli altri metodi
+  res.setHeader('Access-Control-Allow-Origin', '*');
+
+  try {
+    // Gestisci la richiesta PUT per aggiornare il messaggio in sospeso
+    if (req.method === 'PUT') {
+      const { token } = req.query;
+      
+      if (!token || !pendingMessages.has(token)) {
+        return res.status(404).json({ error: 'Token non valido o scaduto' });
+      }
+      
+      if (approvedTokens.has(token)) {
+        return res.status(400).json({ error: 'Questo messaggio è già stato approvato' });
+      }
+      
+      // Ottieni il messaggio aggiornato dalla richiesta
+      let updatedData;
+      try {
+        updatedData = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
+      } catch (e) {
+        return res.status(400).json({ error: 'Formato dati non valido' });
+      }
+      
+      if (!updatedData.message) {
+        return res.status(400).json({ error: 'Messaggio mancante' });
+      }
+      
+      // Aggiorna il messaggio in sospeso
+      const pendingData = pendingMessages.get(token);
+      pendingData.message = updatedData.message;
+      pendingMessages.set(token, pendingData);
+      
+      return res.status(200).json({ success: true, message: 'Messaggio aggiornato con successo' });
+    }
+
+    // Gestisci la richiesta GET per verificare lo stato del token
+    if (req.method === 'GET') {
+      // Controlla se è una richiesta di verifica per un token
+      const { token } = req.query;
+      
+      if (token) {
+        if (approvedTokens.has(token)) {
+          return res.status(200).json({ 
+            status: 'already_approved', 
+            message: 'Questa email è già stata approvata e inviata.' 
+          });
+        } else if (pendingMessages.has(token)) {
+          return res.status(200).json({ 
+            status: 'pending', 
+            message: pendingMessages.get(token) 
+          });
+        } else {
+          return res.status(404).json({ 
+            status: 'not_found', 
+            message: 'Token non valido o scaduto.' 
+          });
+        }
+      }
+      
+      return res.status(400).json({ error: 'Richiesta non valida' });
+    }
+
+    // Verifica che ci siano i dati richiesti per POST
+    if (req.method !== 'POST') {
+      return res.status(405).json({ error: 'Metodo non consentito' });
+    }
+
+    // Log delle intestazioni e del corpo della richiesta
+    console.log('Headers:', req.headers);
+    console.log('Body:', req.body);
+
+    // Estrai il corpo della richiesta
+    let formData;
+    try {
+      if (typeof req.body === 'string') {
+        formData = JSON.parse(req.body);
+      } else {
+        formData = req.body;
+      }
+    } catch (error) {
+      console.error('Errore nel parsing del corpo:', error);
+      return res.status(400).json({ error: 'Corpo della richiesta non valido' });
+    }
+
+    // Verifica che ci sia almeno l'email
+    if (!formData.email) {
+      return res.status(400).json({ error: 'Email richiesta nel body' });
+    }
+
+    console.log('Richiesta ricevuta per:', formData.email);
+
+    // Genera il testo di qualifica utilizzando OpenAI
+    const qualificationText = await generateQualificationText(formData);
+    console.log('Testo generato:', qualificationText);
+
+    // Genera un token unico per questa richiesta
+    const token = crypto.randomBytes(16).toString('hex');
+    
+    // Salva il messaggio in sospeso
+    pendingMessages.set(token, {
+      email: formData.email,
+      message: qualificationText,
+      formData: formData,
+      timestamp: Date.now()
+    });
+
+    // Crea i link per l'approvazione e la modifica
+    const baseUrl = process.env.VERCEL_URL 
+      ? `https://${process.env.VERCEL_URL}` 
+      : 'https://leadqualifier.vercel.app';
+    
+    const approvalLink = `${baseUrl}/api/approve?token=${token}`;
+    const editLink = `${baseUrl}/api/edit?token=${token}`;
+
+    // Invia il messaggio a Slack con i link di approvazione e modifica
+    await sendMessageToSlack(qualificationText, approvalLink, editLink, formData.email);
+
+    // Restituisci una risposta di successo
+    return res.status(200).json({
+      success: true,
+      message: 'Messaggio inviato a Slack per approvazione',
+    });
+  } catch (error) {
+    console.error('Errore nella gestione della richiesta:', error);
+    return res.status(500).json({ error: error.message });
   }
 } 
