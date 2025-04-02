@@ -80,7 +80,6 @@ Includi SOLO queste tre righe di informazioni, nient'altro.
         },
         { role: "user", content: prompt }
       ],
-      temperature: 0.3,
       max_completion_tokens: 300
     });
 
