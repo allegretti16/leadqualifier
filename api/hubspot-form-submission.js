@@ -1,5 +1,16 @@
 const { OpenAI } = require('openai');
 
+// Funzione helper per ottenere l'URL base
+function getBaseUrl() {
+  if (process.env.NODE_ENV === 'development') {
+    return 'http://localhost:3000';
+  } else if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`;
+  } else {
+    return 'https://leadqualifier.vercel.app';
+  }
+}
+
 // Inizializza OpenAI
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
