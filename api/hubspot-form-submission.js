@@ -51,8 +51,7 @@ async function searchCompanyInfo(companyName) {
 
     console.log('Ricerca informazioni per azienda:', companyName);
     
-    const searchQuery = `${companyName} fatturato numero dipendenti informazioni aziendali`;
-    
+    // Prima chiamata: utilizzo direttamente web_search come funzione
     const response = await openai.chat.completions.create({
       model: "gpt-4o",
       messages: [
@@ -67,11 +66,28 @@ async function searchCompanyInfo(companyName) {
       ],
       tools: [
         {
-          type: "web_search"
+          type: "function",
+          function: {
+            name: "web_search",
+            description: "Cerca informazioni sul web",
+            parameters: {
+              type: "object",
+              properties: {
+                search_term: {
+                  type: "string",
+                  description: "Il termine di ricerca"
+                }
+              },
+              required: ["search_term"]
+            }
+          }
         }
       ],
       tool_choice: {
-        type: "web_search"
+        type: "function",
+        function: {
+          name: "web_search"
+        }
       },
       temperature: 0.7
     });
@@ -84,7 +100,7 @@ async function searchCompanyInfo(companyName) {
       const searchArgs = JSON.parse(toolCalls[0].function.arguments);
       searchResults = searchArgs.search_term;
       
-      // Usa i risultati della ricerca per generare un riassunto
+      // Seconda chiamata: usa i risultati per generare un riassunto
       const summaryResponse = await openai.chat.completions.create({
         model: "gpt-4o-mini",
         messages: [
@@ -95,6 +111,10 @@ async function searchCompanyInfo(companyName) {
           { 
             role: "user", 
             content: `Informazioni su ${companyName}: ${searchResults}` 
+          },
+          {
+            role: "assistant",
+            content: "Ecco un riassunto delle informazioni aziendali richieste:"
           }
         ],
         temperature: 0.7,
@@ -107,7 +127,31 @@ async function searchCompanyInfo(companyName) {
     return 'Informazioni non disponibili (ricerca non riuscita)';
   } catch (error) {
     console.error('Errore nella ricerca di informazioni aziendali:', error);
-    return 'Errore nella ricerca di informazioni aziendali';
+    
+    // Fallback: tenta una ricerca più semplice senza web_search
+    try {
+      console.log('Tentativo di ricerca alternativa...');
+      const fallbackResponse = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          { 
+            role: "system", 
+            content: "Sei un assistente che conosce informazioni generali sulle aziende più note. Fornisci un breve riassunto di ciò che sai su questa azienda, specificando se le informazioni potrebbero non essere aggiornate." 
+          },
+          { 
+            role: "user", 
+            content: `Cosa sai dell'azienda ${companyName}? Concentrati su: fatturato, numero di dipendenti, settore, prodotti/servizi principali.` 
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 250
+      });
+      
+      return fallbackResponse.choices[0].message.content.trim() + "\n\n(Nota: queste informazioni potrebbero non essere aggiornate o complete)";
+    } catch (fallbackError) {
+      console.error('Anche la ricerca alternativa è fallita:', fallbackError);
+      return 'Errore nella ricerca di informazioni aziendali';
+    }
   }
 }
 
