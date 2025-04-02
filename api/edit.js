@@ -2,8 +2,12 @@
 export default async function handler(req, res) {
   // Log della richiesta per debug
   console.log('Richiesta ricevuta su /api/edit');
-  console.log('Query params:', req.query);
-  console.log('Method:', req.method);
+  console.log('URL completo:', req.url);
+  console.log('Query completa:', JSON.stringify(req.query));
+  console.log('Query params individuali:');
+  for (const [key, value] of Object.entries(req.query)) {
+    console.log(`- ${key}: ${value}`);
+  }
   console.log('Headers:', JSON.stringify(req.headers, null, 2));
   
   // Abilita CORS
@@ -16,11 +20,16 @@ export default async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // Estraggo la email direttamente dall'URL completo per verificare se è presente
+  const urlSearchParams = new URLSearchParams(req.url.split('?')[1] || '');
+  const emailFromUrl = urlSearchParams.get('email');
+  console.log('Email estratta direttamente dall\'URL:', emailFromUrl);
+
   try {
     // Estraggo i parametri dalla query
     let { email, originalMessage } = req.query;
     
-    console.log('Parametri ricevuti:');
+    console.log('Parametri ricevuti (dopo estrazione):');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
     console.log('- originalMessage:', typeof originalMessage, originalMessage ? 'presente' : 'mancante');
     
@@ -91,8 +100,9 @@ export default async function handler(req, res) {
               
               <div class="details">
                 <p><strong>Informazioni di debug:</strong></p>
-                <p>URL: ${req.url}</p>
-                <p>Query: ${JSON.stringify(req.query)}</p>
+                <p>URL completo: ${req.url}</p>
+                <p>Query params: ${JSON.stringify(req.query)}</p>
+                <p>Email estratta direttamente: ${emailFromUrl || 'non trovata'}</p>
               </div>
               
               <p>Prova a tornare indietro e cliccare nuovamente sul pulsante "Modifica" nel messaggio di Slack.</p>
@@ -103,16 +113,21 @@ export default async function handler(req, res) {
       `);
     }
 
-    // Se l'email non è presente, mostriamo un form di inserimento
+    // Controlla se l'email è stata trovata da qualsiasi fonte
+    if (!email && emailFromUrl) {
+      email = emailFromUrl;
+      console.log('Email recuperata dall\'URL completo:', email);
+    }
+
+    // Usiamo un'email predefinita se non fornita
     if (!email) {
-      console.log('Email mancante, mostro il form di inserimento email');
-      
+      // Per debug, mostro una pagina speciale se l'email manca
       res.setHeader('Content-Type', 'text/html');
       return res.status(200).send(`
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Inserisci Email</title>
+            <title>Debug Email Mancante</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -121,95 +136,108 @@ export default async function handler(req, res) {
                 margin: 0;
                 padding: 20px;
                 background-color: #f5f5f5;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
               }
               .container {
                 background-color: white;
                 padding: 30px;
                 border-radius: 8px;
                 box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-                max-width: 500px;
-                width: 100%;
+                max-width: 900px;
+                margin: 0 auto;
               }
               h1 {
-                color: #333;
+                color: #e74c3c;
                 margin-bottom: 20px;
-                font-size: 24px;
+              }
+              h2 {
+                color: #3498db;
+                margin-top: 30px;
+                margin-bottom: 10px;
               }
               p {
-                color: #666;
-                margin-bottom: 20px;
+                color: #333;
+                margin-bottom: 15px;
                 line-height: 1.5;
               }
-              .field {
-                margin-bottom: 20px;
-              }
-              label {
-                display: block;
-                margin-bottom: 5px;
-                font-weight: bold;
-                color: #555;
-              }
-              input {
-                width: 100%;
-                padding: 10px;
-                border: 1px solid #ddd;
+              .box {
+                background-color: #f9f9f9;
+                padding: 15px;
                 border-radius: 4px;
-                font-size: 16px;
-                box-sizing: border-box;
+                margin: 20px 0;
+                text-align: left;
+                font-family: monospace;
+                white-space: pre-wrap;
+                overflow-wrap: break-word;
               }
               .button {
                 display: inline-block;
+                margin-top: 20px;
                 padding: 10px 20px;
                 background-color: #3498db;
                 color: white;
-                border: none;
+                text-decoration: none;
                 border-radius: 4px;
-                font-size: 16px;
-                cursor: pointer;
               }
-              .button:hover {
-                background-color: #2980b9;
+              .action-buttons {
+                display: flex;
+                gap: 10px;
+                justify-content: center;
+                margin-top: 30px;
               }
             </style>
           </head>
           <body>
             <div class="container">
-              <h1>Inserisci l'email del destinatario</h1>
-              <p>Per procedere con la modifica del messaggio, inserisci l'email del destinatario:</p>
+              <h1>Debug - Parametro Email Mancante</h1>
+              <p>È stato rilevato che il parametro 'email' non è presente nella query dell'URL.</p>
               
-              <form id="email-form">
-                <div class="field">
-                  <label for="email">Email:</label>
-                  <input type="email" id="email" required placeholder="esempio@dominio.it">
-                </div>
-                <button type="submit" class="button">Continua</button>
-              </form>
+              <h2>Dettagli della richiesta</h2>
+              <div class="box">URL completo: ${req.url}</div>
+              <div class="box">Query params come JSON: ${JSON.stringify(req.query, null, 2)}</div>
+              <div class="box">Email estratta direttamente: ${emailFromUrl || 'non trovata'}</div>
+              
+              <h2>Analisi e possibili cause</h2>
+              <p>I motivi per cui l'email potrebbe mancare includono:</p>
+              <ul>
+                <li>Slack modifica o filtra alcuni parametri negli URL</li>
+                <li>Il parametro email è stato codificato in modo errato</li>
+                <li>L'URL è stato troncato a causa della lunghezza eccessiva</li>
+                <li>Un problema con la configurazione di Vercel impedisce il passaggio corretto dei parametri</li>
+              </ul>
+              
+              <h2>Soluzioni</h2>
+              <p>Puoi procedere in uno dei seguenti modi:</p>
+              
+              <div class="action-buttons">
+                <a href="javascript:useDefaultEmail()" class="button">Usa Email Predefinita</a>
+                <a href="javascript:specifyEmail()" class="button">Specifica Email</a>
+                <a href="javascript:window.close()" class="button">Chiudi pagina</a>
+              </div>
             </div>
-
+            
             <script>
-              // Quando il form viene inviato
-              document.getElementById('email-form').addEventListener('submit', function(e) {
-                e.preventDefault();
-                
-                const email = document.getElementById('email').value.trim();
-                if (!email) return;
-                
-                // Costruisci URL con entrambi i parametri
-                const originalMessage = "${encodeURIComponent(originalMessage)}";
+              function useDefaultEmail() {
+                const defaultEmail = "no-reply@extendi.it";
                 const currentUrl = new URL(window.location.href);
-                currentUrl.searchParams.set('email', email);
-                
-                // Reindirizza alla stessa pagina ma con l'email inclusa
+                currentUrl.searchParams.set('email', defaultEmail);
                 window.location.href = currentUrl.toString();
-              });
+              }
+              
+              function specifyEmail() {
+                const email = prompt("Inserisci l'email del destinatario:", "");
+                if (email) {
+                  const currentUrl = new URL(window.location.href);
+                  currentUrl.searchParams.set('email', email);
+                  window.location.href = currentUrl.toString();
+                }
+              }
             </script>
           </body>
         </html>
       `);
+      
+      // email = "no-reply@extendi.it";
+      // console.log('Email non fornita, utilizzo email predefinita:', email);
     }
 
     console.log('Parametri validi, genero il form HTML');
@@ -408,9 +436,9 @@ export default async function handler(req, res) {
             
             <div id="editor-view" class="split-view active">
               <form id="edit-form">
-                <div class="field">
+                <div class="field" style="display: none;">
                   <label for="email">Email Destinatario:</label>
-                  <input type="email" id="email" value="${email}" ${email ? 'disabled' : ''} required>
+                  <input type="email" id="email" value="${email}" readonly>
                 </div>
                 <div class="field">
                   <label for="subject">Oggetto:</label>
@@ -431,9 +459,9 @@ export default async function handler(req, res) {
               <div class="flex-container">
                 <div class="editor-container">
                   <form id="split-form">
-                    <div class="field">
+                    <div class="field" style="display: none;">
                       <label for="email-split">Email Destinatario:</label>
-                      <input type="email" id="email-split" value="${email}" ${email ? 'disabled' : ''} required>
+                      <input type="email" id="email-split" value="${email}" readonly>
                     </div>
                     <div class="field">
                       <label for="subject-split">Oggetto:</label>
@@ -460,9 +488,9 @@ export default async function handler(req, res) {
             </div>
             
             <div id="preview-view" class="split-view">
-              <div class="field">
+              <div class="field" style="display: none;">
                 <label for="email-preview">Email Destinatario:</label>
-                <input type="email" id="email-preview" value="${email}" disabled>
+                <input type="email" id="email-preview" value="${email}" readonly>
               </div>
               <div class="field">
                 <label for="subject-preview">Oggetto:</label>

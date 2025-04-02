@@ -44,49 +44,45 @@ Scrivi SOLO la risposta, senza aggiungere prefazioni o note.
 // Funzione per inviare messaggi a Slack
 async function sendMessageToSlack(formData, qualificationText) {
   try {
-    // Costruzione più flessibile dell'URL di base
+    // Ottieni dominio di base per costruire gli URL
     let baseUrl;
-    if (process.env.VERCEL_URL) {
-      // URL di produzione su Vercel
-      baseUrl = `https://${process.env.VERCEL_URL}`;
-    } else if (process.env.NEXT_PUBLIC_SITE_URL) {
-      // URL personalizzato definito in variabili d'ambiente
-      baseUrl = process.env.NEXT_PUBLIC_SITE_URL;
-    } else if (process.env.NODE_ENV === 'development') {
-      // Ambiente di sviluppo locale, solitamente su localhost:3000
+    
+    // In locale, usa localhost
+    if (process.env.NODE_ENV === 'development') {
       baseUrl = 'http://localhost:3000';
-    } else {
-      // Fallback all'URL hardcoded
+    } 
+    // In produzione, usa l'URL di Vercel o quello personalizzato
+    else if (process.env.VERCEL_URL) {
+      baseUrl = `https://${process.env.VERCEL_URL}`;
+    } 
+    // Fallback all'URL hardcoded se non ci sono alternative
+    else {
       baseUrl = 'https://leadqualifier.vercel.app';
     }
-
+    
     console.log('URL base utilizzato:', baseUrl);
 
-    // Verifica che la email sia presente - aggiungo controllo di sicurezza
+    // IMPORTANTE: Verifica che l'email sia presente nei dati
     if (!formData.email) {
-      console.error('Email mancante nei dati del form. Non posso generare URL validi.');
+      console.error('Email mancante nei dati del form');
       throw new Error('Email mancante nei dati del form');
     }
 
-    // Codifica sicura dei parametri URL
-    const safeEmail = encodeURIComponent(formData.email || "no-email");
-    const safeMessage = encodeURIComponent(qualificationText);
+    // MODIFICA: Utilizzo di "email=" in modo più visibile nell'URL e doppia codifica
+    // per assicurarmi che i caratteri speciali non causino problemi
+    const emailParam = `email=${encodeURIComponent(formData.email)}`;
     
-    // Per sicurezza, limito la lunghezza del messaggio nell'URL a 1500 caratteri
-    const truncatedMessage = safeMessage.length > 1500 ? safeMessage.substring(0, 1500) + '...' : safeMessage;
+    // Costruisco gli URL con il parametro email ben visibile all'inizio
+    const editUrl = `${baseUrl}/api/edit?${emailParam}&originalMessage=${encodeURIComponent(qualificationText)}`;
+    const approveUrl = `${baseUrl}/api/approve?${emailParam}&message=${encodeURIComponent(qualificationText)}`;
 
-    // Creo gli URL con parametri corretti e separati correttamente con '&'
-    const editUrl = `${baseUrl}/api/edit?email=${safeEmail}&originalMessage=${truncatedMessage}`;
-    const approveUrl = `${baseUrl}/api/approve?email=${safeEmail}&message=${truncatedMessage}`;
-
-    // Log degli URL per debug
-    console.log('Email codificata:', safeEmail);
-    console.log('Lunghezza messaggio originale:', qualificationText.length);
-    console.log('Lunghezza messaggio codificato:', safeMessage.length);
-    console.log('Lunghezza messaggio troncato:', truncatedMessage.length);
+    // Log completi per debug
+    console.log('Email utilizzata:', formData.email);
+    console.log('Parametro email codificato:', emailParam);
     console.log('Edit URL completo:', editUrl);
     console.log('Approve URL completo:', approveUrl);
 
+    // Blocchi per il messaggio Slack
     const blocks = [
       {
         type: "section",
@@ -133,7 +129,7 @@ async function sendMessageToSlack(formData, qualificationText) {
             url: approveUrl,
           },
         ],
-      },
+      }
     ];
 
     const result = await fetch("https://slack.com/api/chat.postMessage", {

@@ -49,17 +49,17 @@ export default async function handler(req, res) {
 
   try {
     // Estraggo i parametri dalla query
-    const { email, message } = req.query;
+    let { email, message } = req.query;
     
     console.log('Parametri ricevuti:');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
     console.log('- message:', typeof message, message ? 'presente' : 'mancante', message ? `(lunghezza: ${message.length})` : '');
     
-    // Verifico che i parametri siano presenti
-    if (!email || !message) {
-      console.error('Parametri mancanti:', { email, message });
+    // Verifico che ci sia almeno il messaggio
+    if (!message) {
+      console.error('Messaggio mancante');
       
-      // Restituisco una pagina HTML di errore invece di JSON
+      // Restituisco una pagina HTML di errore
       res.setHeader('Content-Type', 'text/html');
       return res.status(400).send(`
         <!DOCTYPE html>
@@ -118,13 +118,9 @@ export default async function handler(req, res) {
           <body>
             <div class="container">
               <h1>Errore nei Parametri</h1>
-              <p>Non è possibile approvare l'email perché mancano alcuni parametri necessari.</p>
+              <p>Non è possibile approvare l'email perché manca il messaggio da inviare.</p>
               
               <div class="details">
-                <p><strong>Parametri mancanti:</strong></p>
-                ${!email ? '<p>• Email del destinatario</p>' : ''}
-                ${!message ? '<p>• Messaggio da inviare</p>' : ''}
-                
                 <p><strong>Informazioni di debug:</strong></p>
                 <p>URL: ${req.url}</p>
                 <p>Query: ${JSON.stringify(req.query)}</p>
@@ -136,6 +132,12 @@ export default async function handler(req, res) {
           </body>
         </html>
       `);
+    }
+
+    // Se l'email non è presente, utilizziamo un valore predefinito
+    if (!email) {
+      email = "no-reply@extendi.it";
+      console.log('Email non fornita, utilizzo email predefinita:', email);
     }
 
     // Decodifico il messaggio se necessario
@@ -454,4 +456,20 @@ async function sendHubSpotEmail(email, message) {
     console.error('Errore nell\'invio a HubSpot:', error);
     throw error;
   }
+}
+
+// Funzione comune per l'approvazione
+function approveWithParams(email, message) {
+  if (!email) {
+    email = "no-reply@extendi.it"; // Usiamo un'email predefinita se non fornita
+  }
+  
+  // Utilizziamo la stessa origine per l'URL di approvazione
+  const baseUrl = window.location.origin;
+  console.log('Base URL:', baseUrl);
+  
+  const approveUrl = baseUrl + '/api/approve?email=' + encodeURIComponent(email) + '&message=' + encodeURIComponent(message);
+  console.log('Approve URL:', approveUrl);
+  
+  window.location.href = approveUrl;
 } 
