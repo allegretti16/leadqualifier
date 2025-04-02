@@ -193,7 +193,7 @@ async function sendMessageToSlack(formData, qualificationText) {
     global[`message_${messageId}`] = qualificationText;
 
     // Usa URL più brevi con solo l'ID del messaggio e l'email
-    const approveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}`;
+    const approveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=true`;
 
     // Log per debug
     console.log('Email usata nell\'URL:', formData.email);
@@ -238,7 +238,7 @@ async function sendMessageToSlack(formData, qualificationText) {
             type: "button",
             text: {
               type: "plain_text",
-              text: "✅ Approva e Registra",
+              text: "✅ Modifica e Approva",
               emoji: true,
             },
             style: "primary",

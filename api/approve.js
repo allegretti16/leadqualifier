@@ -49,12 +49,13 @@ export default async function handler(req, res) {
 
   try {
     // Estraggo i parametri dalla query
-    let { email, id, modifiedMessage } = req.query;
+    let { email, id, modifiedMessage, skipHubspot } = req.query;
     
     console.log('Parametri ricevuti:');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
     console.log('- id:', typeof id, id ? 'presente' : 'mancante');
     console.log('- modifiedMessage:', typeof modifiedMessage, modifiedMessage ? 'presente (lunghezza: ' + modifiedMessage.length + ')' : 'mancante');
+    console.log('- skipHubspot:', skipHubspot);
     
     // Recupera il messaggio originale dalla variabile globale
     let message;
@@ -169,7 +170,191 @@ export default async function handler(req, res) {
     console.log('Approvazione ricevuta per:', email);
     console.log('Messaggio da inviare (lunghezza):', message.length);
 
-    // Invia l'email tramite HubSpot (crea un'attività)
+    // Ottieni l'URL base corrente per i link
+    const baseUrl = (() => {
+      if (process.env.NODE_ENV === 'development') {
+        return 'http://localhost:3000';
+      } else if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}`;
+      } else {
+        return 'https://leadqualifier.vercel.app';
+      }
+    })();
+
+    // Se skipHubspot è presente e non false, mostra la pagina di modifica
+    // altrimenti procedi con il salvataggio su HubSpot
+    if (skipHubspot !== 'false') {
+      // Se non abbiamo già modificato il messaggio, mostriamo la pagina di modifica
+      if (!modifiedMessage) {
+        // Pagina di modifica del messaggio
+        res.setHeader('Content-Type', 'text/html');
+        return res.status(200).send(`
+          <!DOCTYPE html>
+          <html>
+            <head>
+              <title>Modifica Messaggio</title>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <style>
+                body {
+                  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                  margin: 0;
+                  padding: 20px;
+                  background-color: #f9fafb;
+                }
+                .container {
+                  background-color: white;
+                  padding: 40px;
+                  border-radius: 12px;
+                  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+                  max-width: 800px;
+                  margin: 0 auto;
+                }
+                h1 {
+                  color: #2c3e50;
+                  margin-bottom: 20px;
+                  font-weight: 600;
+                  text-align: center;
+                }
+                .email-info {
+                  background-color: #e3f2fd;
+                  padding: 15px;
+                  border-radius: 8px;
+                  margin: 20px 0;
+                  border-left: 4px solid #2196f3;
+                }
+                .form-group {
+                  margin-bottom: 25px;
+                }
+                label {
+                  display: block;
+                  font-weight: 500;
+                  margin-bottom: 8px;
+                  color: #455a64;
+                }
+                textarea {
+                  width: 100%;
+                  height: 300px;
+                  padding: 12px;
+                  border: 1px solid #ddd;
+                  border-radius: 4px;
+                  font-family: inherit;
+                  font-size: 14px;
+                  line-height: 1.6;
+                  box-sizing: border-box;
+                }
+                .split-view {
+                  display: flex;
+                  gap: 20px;
+                  margin-bottom: 25px;
+                }
+                .editor, .preview {
+                  flex: 1;
+                }
+                .preview-content {
+                  border: 1px solid #ddd;
+                  border-radius: 4px;
+                  padding: 12px;
+                  min-height: 300px;
+                  background-color: #f9f9f9;
+                  overflow-y: auto;
+                }
+                .button-group {
+                  display: flex;
+                  justify-content: center;
+                  gap: 15px;
+                  margin-top: 30px;
+                }
+                .button {
+                  padding: 12px 24px;
+                  background-color: #4CAF50;
+                  color: white;
+                  text-decoration: none;
+                  border-radius: 4px;
+                  font-weight: 500;
+                  border: none;
+                  cursor: pointer;
+                  font-size: 16px;
+                }
+                .button-secondary {
+                  background-color: #607D8B;
+                }
+                .button-secondary:hover {
+                  background-color: #546E7A;
+                }
+                .button:hover {
+                  opacity: 0.9;
+                }
+              </style>
+            </head>
+            <body>
+              <div class="container">
+                <h1>Modifica il messaggio prima di salvarlo</h1>
+                <div class="email-info">
+                  <p><strong>Email destinatario:</strong> ${email}</p>
+                </div>
+                
+                <div class="split-view">
+                  <div class="editor">
+                    <div class="form-group">
+                      <label for="messageText">Testo del messaggio:</label>
+                      <textarea id="messageText">${message}</textarea>
+                    </div>
+                  </div>
+                  <div class="preview">
+                    <label>Anteprima:</label>
+                    <div class="preview-content" id="preview"></div>
+                  </div>
+                </div>
+                
+                <div class="button-group">
+                  <button onclick="saveToHubspot()" class="button">Salva su HubSpot</button>
+                  <button onclick="window.close()" class="button button-secondary">Annulla</button>
+                </div>
+              </div>
+              
+              <!-- Includo la libreria Marked.js per il rendering del Markdown -->
+              <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+              <script>
+                // Configura Marked.js per il rendering
+                marked.setOptions({
+                  breaks: true,
+                  gfm: true
+                });
+                
+                // Aggiorna l'anteprima quando il testo cambia
+                const textarea = document.getElementById('messageText');
+                const preview = document.getElementById('preview');
+                
+                function updatePreview() {
+                  preview.innerHTML = marked.parse(textarea.value);
+                }
+                
+                // Aggiorna inizialmente l'anteprima
+                updatePreview();
+                
+                // Aggiungi l'evento di input per aggiornare l'anteprima in tempo reale
+                textarea.addEventListener('input', updatePreview);
+                
+                // Funzione per salvare su HubSpot
+                function saveToHubspot() {
+                  const modifiedText = textarea.value;
+                  const encodedText = encodeURIComponent(modifiedText);
+                  
+                  // Crea l'URL con il messaggio modificato e skipHubspot=false
+                  const url = '${baseUrl}/api/approve?email=${encodeURIComponent(email)}&id=${id}&modifiedMessage=' + encodedText + '&skipHubspot=false';
+                  
+                  // Reindirizza alla pagina di approvazione con il messaggio modificato
+                  window.location.href = url;
+                }
+              </script>
+            </body>
+          </html>
+        `);
+      }
+    }
+
+    // Se siamo qui, dobbiamo salvare su HubSpot
     await sendHubSpotEmail(email, message);
     
     // Invia messaggio di conferma a Slack
