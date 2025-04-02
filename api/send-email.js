@@ -23,7 +23,7 @@ async function sendGmailEmail(to, subject, text) {
       service: 'gmail',
       auth: {
         type: 'OAuth2',
-        user: 'hello@extendi.it', // Usa l'email appropriata configurata con OAuth
+        user: 'allegretti@extendi.it', // Usa l'email appropriata configurata con OAuth
         clientId: process.env.GOOGLE_CLIENT_ID,
         clientSecret: process.env.GOOGLE_CLIENT_SECRET,
         refreshToken: process.env.GOOGLE_REFRESH_TOKEN,
