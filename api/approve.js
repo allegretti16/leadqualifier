@@ -480,9 +480,6 @@ export default async function handler(req, res) {
               
               // Funzione per salvare su HubSpot
               function saveToHubspot() {
-                const modifiedText = textarea.value;
-                const encodedText = encodeURIComponent(modifiedText);
-                
                 // Mostra un messaggio di elaborazione
                 const loadingMessage = document.createElement('div');
                 loadingMessage.style.position = 'fixed';
@@ -497,61 +494,46 @@ export default async function handler(req, res) {
                 loadingMessage.textContent = 'Elaborazione in corso...';
                 document.body.appendChild(loadingMessage);
                 
-                // Recupera i dettagli del form da localStorage o dalla query
-                let formDetailsParam = '';
+                // Ottieni il testo modificato
+                const modifiedText = textarea.value;
                 
+                // Salva il messaggio nel localStorage come backup
                 try {
-                  // Prima prova dal localStorage
-                  const storedFormDetails = localStorage.getItem('formDetails_' + messageId);
-                  console.log('Dettagli form da localStorage:', storedFormDetails);
-                  
-                  if (storedFormDetails) {
-                    // Verifica che sia un JSON valido
-                    JSON.parse(storedFormDetails);
-                    formDetailsParam = "&formDetails=" + encodeURIComponent(storedFormDetails);
-                  } 
-                  // Se non ci sono dettagli nel localStorage, usa quelli dalla query
-                  else if (formDetailsFromQuery) {
-                    const formDetailsStr = JSON.stringify(formDetailsFromQuery);
-                    formDetailsParam = "&formDetails=" + encodeURIComponent(formDetailsStr);
-                  }
+                  localStorage.setItem('message_backup', modifiedText);
                 } catch (e) {
-                  console.error('Errore nel processare i dettagli del form:', e);
+                  console.error('Errore nel salvare il messaggio di backup:', e);
                 }
                 
-                console.log('formDetailsParam:', formDetailsParam);
-                
-                // Crea l'URL con il messaggio modificato e skipHubspot=false
-                const url = baseUrl + '/api/approve?email=' + encodeURIComponent(email) + '&modifiedMessage=' + encodedText + '&skipHubspot=false' + formDetailsParam;
-                
-                console.log('URL di reindirizzamento:', url);
-                
-                // Usa un approccio alternativo con un form invece di window.location per gestire URL lunghi
-                const form = document.createElement('form');
-                form.method = 'POST';
-                form.action = baseUrl + '/api/approve';
-                
-                // Aggiungi i campi come input hidden
-                const addField = (name, value) => {
-                  const input = document.createElement('input');
-                  input.type = 'hidden';
-                  input.name = name;
-                  input.value = value;
-                  form.appendChild(input);
-                };
-                
-                addField('email', email);
-                addField('modifiedMessage', modifiedText);
-                addField('skipHubspot', 'false');
-                
-                // Aggiungi formDetails se presente
-                if (storedFormDetails || formDetailsFromQuery) {
-                  addField('formDetails', storedFormDetails || JSON.stringify(formDetailsFromQuery));
-                }
-                
-                // Aggiungi il form al documento e invialo
-                document.body.appendChild(form);
-                form.submit();
+                // Utilizza il metodo FETCH POST per inviare i dati al server
+                fetch(baseUrl + '/api/approve', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                  },
+                  body: JSON.stringify({
+                    email: email,
+                    modifiedMessage: modifiedText,
+                    skipHubspot: false,
+                    formDetails: formDetailsFromQuery || null
+                  })
+                })
+                .then(response => {
+                  if (!response.ok) {
+                    throw new Error('Errore nella richiesta: ' + response.status);
+                  }
+                  return response.text();
+                })
+                .then(html => {
+                  // Sostituisci l'intero contenuto della pagina con la risposta HTML
+                  document.open();
+                  document.write(html);
+                  document.close();
+                })
+                .catch(error => {
+                  console.error('Errore durante il salvataggio:', error);
+                  loadingMessage.style.backgroundColor = '#f44336';
+                  loadingMessage.textContent = 'Errore: ' + error.message;
+                });
               }
             </script>
           </body>
