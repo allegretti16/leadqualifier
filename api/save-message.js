@@ -129,6 +129,7 @@ export default async function handler(req, res) {
               // Salva i dettagli del form se presenti
               if (formDetails) {
                 localStorage.setItem('formDetails_' + messageId, formDetails);
+                console.log('Dettagli form salvati: ', formDetails);
               }
               
               // Reindirizza alla pagina di approvazione

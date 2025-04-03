@@ -79,7 +79,18 @@ export default async function handler(req, res) {
     // Se ci sono i dettagli del form, li aggiungiamo in fondo
     if (formDetails) {
       try {
-        const details = JSON.parse(decodeURIComponent(formDetails));
+        // Prova a decodificare l'URL se necessario
+        let jsonStr = formDetails;
+        if (typeof formDetails === 'string' && formDetails.includes('%')) {
+          try {
+            jsonStr = decodeURIComponent(formDetails);
+          } catch (e) {
+            console.error('Errore nella decodifica URL:', e);
+          }
+        }
+        
+        // Tenta di parsare il JSON
+        const details = JSON.parse(jsonStr);
         emailBody += `\n\n------------------\n`;
         emailBody += `INFORMAZIONI RICHIESTA ORIGINALE:\n\n`;
         
@@ -105,6 +116,7 @@ export default async function handler(req, res) {
         
       } catch (error) {
         console.error('Errore nel parsing dei dettagli del form:', error);
+        console.error('formDetails ricevuto:', formDetails);
         // Continuiamo senza aggiungere i dettagli
       }
     }

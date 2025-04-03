@@ -212,7 +212,7 @@ export default async function handler(req, res) {
               const messageId = "${id}";
               const email = "${email || 'no-reply@extendi.it'}";
               const skipHubspot = ${skipHubspot === 'true'};
-              const formDetailsFromQuery = ${formDetails ? `"${formDetails}"` : 'null'};
+              const formDetailsFromQuery = ${formDetails ? formDetails : 'null'};
               const baseUrl = "${baseUrl}";
               
               // Funzione per salvare il messaggio nel localStorage
@@ -468,14 +468,22 @@ export default async function handler(req, res) {
                 // Recupera i dettagli del form da localStorage o dalla query
                 let formDetailsParam = '';
                 const storedFormDetails = localStorage.getItem('formDetails_' + messageId);
+                
+                console.log('storedFormDetails:', storedFormDetails);
+                console.log('formDetailsFromQuery:', formDetailsFromQuery);
+                
                 if (storedFormDetails) {
                   formDetailsParam = "&formDetails=" + encodeURIComponent(storedFormDetails);
                 } else if (formDetailsFromQuery) {
                   formDetailsParam = "&formDetails=" + encodeURIComponent(formDetailsFromQuery);
                 }
                 
+                console.log('formDetailsParam:', formDetailsParam);
+                
                 // Crea l'URL con il messaggio modificato e skipHubspot=false
                 const url = baseUrl + '/api/approve?email=' + encodeURIComponent(email) + '&modifiedMessage=' + encodedText + '&skipHubspot=false' + formDetailsParam;
+                
+                console.log('URL di reindirizzamento:', url);
                 
                 // Reindirizza alla pagina di approvazione con il messaggio modificato
                 window.location.href = url;
@@ -487,6 +495,10 @@ export default async function handler(req, res) {
     }
 
     // Se siamo qui, dobbiamo salvare su HubSpot
+    console.log('Salvataggio su Hubspot in corso...');
+    console.log('formDetails tipo:', typeof formDetails);
+    console.log('formDetails valore:', formDetails);
+    
     await sendHubSpotEmail(email, messageToUse, formDetails);
     
     // Invia messaggio di conferma a Slack
@@ -631,7 +643,7 @@ export default async function handler(req, res) {
             });
             
             // Prendi il messaggio grezzo e renderizzalo come Markdown
-            const rawMessage = ${JSON.stringify(messageToUse)};
+            const rawMessage = "${messageToUse.replace(/"/g, '\\"').replace(/\n/g, '\\n')}";
             document.getElementById('markdown-content').innerHTML = marked.parse(rawMessage);
           </script>
         </body>
@@ -647,6 +659,8 @@ export default async function handler(req, res) {
 export async function sendHubSpotEmail(email, message, formDetailsString) {
   try {
     console.log('Invio email a:', email);
+    console.log('formDetailsString tipo:', typeof formDetailsString);
+    console.log('formDetailsString valore:', formDetailsString);
     
     // Costruisci l'intestazione dell'email
     const oggetto = "Grazie per averci contattato";
@@ -657,32 +671,63 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
     // Se ci sono i dettagli del form, li aggiungiamo in fondo
     if (formDetailsString) {
       try {
-        const details = JSON.parse(decodeURIComponent(formDetailsString));
+        // Verifica il tipo di formDetailsString e gestisci tutti i casi possibili
+        let formDetailsObj;
+        
+        if (typeof formDetailsString === 'object') {
+          // Già un oggetto
+          formDetailsObj = formDetailsString;
+        } else {
+          // Stringa JSON o stringa URL-encoded
+          let jsonStr = formDetailsString;
+          
+          // Se è una stringa URL-encoded, decodificala
+          if (typeof formDetailsString === 'string' && formDetailsString.includes('%')) {
+            try {
+              jsonStr = decodeURIComponent(formDetailsString);
+            } catch (e) {
+              console.error('Errore nella decodifica URL:', e);
+              // Continua con la stringa originale
+            }
+          }
+          
+          // Tenta di parsare il JSON
+          try {
+            formDetailsObj = JSON.parse(jsonStr);
+          } catch (e) {
+            console.error('Errore nel parsing JSON:', e);
+            // Fallback di sicurezza
+            formDetailsObj = {};
+          }
+        }
+        
+        // Ora abbiamo un oggetto formDetailsObj da usare
         emailBody += `\n\n------------------\n`;
         emailBody += `INFORMAZIONI RICHIESTA ORIGINALE:\n\n`;
         
-        if (details.firstname || details.lastname) {
-          emailBody += `Nome: ${details.firstname || ''} ${details.lastname || ''}\n`;
+        if (formDetailsObj.firstname || formDetailsObj.lastname) {
+          emailBody += `Nome: ${formDetailsObj.firstname || ''} ${formDetailsObj.lastname || ''}\n`;
         }
         
-        if (details.company) {
-          emailBody += `Azienda: ${details.company}\n`;
+        if (formDetailsObj.company) {
+          emailBody += `Azienda: ${formDetailsObj.company}\n`;
         }
         
-        if (details.project_type) {
-          emailBody += `Tipo Progetto: ${details.project_type}\n`;
+        if (formDetailsObj.project_type) {
+          emailBody += `Tipo Progetto: ${formDetailsObj.project_type}\n`;
         }
         
-        if (details.budget) {
-          emailBody += `Budget: ${details.budget}\n`;
+        if (formDetailsObj.budget) {
+          emailBody += `Budget: ${formDetailsObj.budget}\n`;
         }
         
-        if (details.message) {
-          emailBody += `\nMessaggio Originale:\n${details.message}\n`;
+        if (formDetailsObj.message) {
+          emailBody += `\nMessaggio Originale:\n${formDetailsObj.message}\n`;
         }
         
       } catch (error) {
         console.error('Errore nel parsing dei dettagli del form:', error);
+        console.error('Dettagli ricevuti:', formDetailsString);
         // Continuiamo senza aggiungere i dettagli
       }
     }
