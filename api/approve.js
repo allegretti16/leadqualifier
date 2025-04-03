@@ -471,6 +471,27 @@ export default async function handler(req, res) {
             <!-- Includo la libreria Marked.js per il rendering del Markdown -->
             <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
             <script>
+              // Variabili globali necessarie
+              const baseUrl = "${baseUrl}";
+              const email = "${email}";
+              let formDetailsFromQuery = null;
+              
+              // Recupera i dettagli del form da localStorage
+              try {
+                const formDetailsKey = 'formDetails_' + "${id}";
+                const formDetailsStr = localStorage.getItem(formDetailsKey);
+                if (formDetailsStr) {
+                  formDetailsFromQuery = formDetailsStr;
+                  console.log('Dettagli form recuperati da localStorage');
+                } else {
+                  // Fallback per i dettagli del form dalla query
+                  ${formDetails ? `formDetailsFromQuery = ${JSON.stringify(formDetails)};` : ''}
+                  console.log('Dettagli form dalla query');
+                }
+              } catch (e) {
+                console.error('Errore nel recupero dei dettagli del form:', e);
+              }
+              
               // Configura Marked.js per il rendering
               marked.setOptions({
                 breaks: true,
