@@ -465,7 +465,7 @@ export default async function handler(req, res) {
               </div>
               
               <div class="button-group">
-                <button onclick="saveToHubspot()" class="button">Salva su HubSpot</button>
+                <button onclick="saveToHubspot()" class="button">Salva su HubSpot e invia email</button>
                 <button onclick="window.close()" class="button button-secondary">Annulla</button>
               </div>
             </div>

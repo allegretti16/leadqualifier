@@ -73,62 +73,63 @@ export default async function handler(req, res) {
     console.log('Invio diretto email a:', email);
     console.log('Lunghezza messaggio:', message.length);
 
-    // Prepara il messaggio con le informazioni di contesto
-    let emailBody = message;
-    
-    // Se ci sono i dettagli del form, li aggiungiamo in fondo
-    if (formDetails) {
-      try {
-        // Prova a decodificare l'URL se necessario
-        let jsonStr = formDetails;
-        if (typeof formDetails === 'string' && formDetails.includes('%')) {
-          try {
-            jsonStr = decodeURIComponent(formDetails);
-          } catch (e) {
-            console.error('Errore nella decodifica URL:', e);
-          }
-        }
-        
-        // Tenta di parsare il JSON
-        const details = JSON.parse(jsonStr);
-        emailBody += `\n\n------------------\n`;
-        emailBody += `INFORMAZIONI RICHIESTA ORIGINALE:\n\n`;
-        
-        if (details.firstname || details.lastname) {
-          emailBody += `Nome: ${details.firstname || ''} ${details.lastname || ''}\n`;
-        }
-        
-        if (details.company) {
-          emailBody += `Azienda: ${details.company}\n`;
-        }
-        
-        if (details.project_type) {
-          emailBody += `Tipo Progetto: ${details.project_type}\n`;
-        }
-        
-        if (details.budget) {
-          emailBody += `Budget: ${details.budget}\n`;
-        }
-        
-        if (details.message) {
-          emailBody += `\nMessaggio Originale:\n${details.message}\n`;
-        }
-        
-      } catch (error) {
-        console.error('Errore nel parsing dei dettagli del form:', error);
-        console.error('formDetails ricevuto:', formDetails);
-        // Continuiamo senza aggiungere i dettagli
-      }
-    }
-
-    // Se saveToHubspot è true, usa sendHubSpotEmail (che già include l'invio dell'email)
+    // Se saveToHubspot è true, usa sendHubSpotEmail (che già include l'invio dell'email e l'aggiunta dei formDetails)
     if (saveToHubspot === 'true') {
       console.log('Salvataggio su Hubspot richiesto');
-      // Non c'è bisogno di chiamare separatamente sendGmailEmail perché sendHubSpotEmail già lo include
-      await sendHubSpotEmail(email, emailBody, formDetails);
+      // Non c'è bisogno di elaborare i formDetails qui, lo farà sendHubSpotEmail
+      await sendHubSpotEmail(email, message, formDetails);
     } else {
       // Solo invio diretto email senza HubSpot
       console.log('Solo invio email senza HubSpot');
+      
+      // Prepara il messaggio con le informazioni di contesto
+      let emailBody = message;
+      
+      // Se ci sono i dettagli del form, li aggiungiamo in fondo
+      if (formDetails) {
+        try {
+          // Prova a decodificare l'URL se necessario
+          let jsonStr = formDetails;
+          if (typeof formDetails === 'string' && formDetails.includes('%')) {
+            try {
+              jsonStr = decodeURIComponent(formDetails);
+            } catch (e) {
+              console.error('Errore nella decodifica URL:', e);
+            }
+          }
+          
+          // Tenta di parsare il JSON
+          const details = JSON.parse(jsonStr);
+          emailBody += `\n\n------------------\n`;
+          emailBody += `INFORMAZIONI RICHIESTA ORIGINALE:\n\n`;
+          
+          if (details.firstname || details.lastname) {
+            emailBody += `Nome: ${details.firstname || ''} ${details.lastname || ''}\n`;
+          }
+          
+          if (details.company) {
+            emailBody += `Azienda: ${details.company}\n`;
+          }
+          
+          if (details.project_type) {
+            emailBody += `Tipo Progetto: ${details.project_type}\n`;
+          }
+          
+          if (details.budget) {
+            emailBody += `Budget: ${details.budget}\n`;
+          }
+          
+          if (details.message) {
+            emailBody += `\nMessaggio Originale:\n${details.message}\n`;
+          }
+          
+        } catch (error) {
+          console.error('Errore nel parsing dei dettagli del form:', error);
+          console.error('formDetails ricevuto:', formDetails);
+          // Continuiamo senza aggiungere i dettagli
+        }
+      }
+      
       await sendGmailEmail(email, 'Grazie per averci contattato', emailBody);
     }
 
