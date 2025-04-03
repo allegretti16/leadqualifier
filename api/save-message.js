@@ -21,7 +21,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { id, message, email } = req.query;
+    const { id, message, email, formDetails } = req.query;
 
     // Verifica che l'email sia presente e valida
     if (!email || !email.includes('@')) {
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     }
 
     const baseUrl = getBaseUrl();
-    const approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=true`;
+    const approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=true${formDetails ? `&formDetails=${encodeURIComponent(formDetails)}` : ''}`;
 
     // Restituisci una pagina HTML che salva il messaggio in localStorage e poi reindirizza
     res.setHeader('Content-Type', 'text/html');
@@ -109,6 +109,7 @@ export default async function handler(req, res) {
             const email = "${email}";
             const message = ${JSON.stringify(message || '')};
             const approveUrl = "${approveUrl}";
+            const formDetails = ${formDetails ? `"${formDetails}"` : 'null'};
             
             function showError(message) {
               const errorDiv = document.getElementById('error');
@@ -124,6 +125,11 @@ export default async function handler(req, res) {
               
               // Salva anche l'email per sicurezza
               localStorage.setItem('email_' + messageId, email);
+              
+              // Salva i dettagli del form se presenti
+              if (formDetails) {
+                localStorage.setItem('formDetails_' + messageId, formDetails);
+              }
               
               // Reindirizza alla pagina di approvazione
               window.location.href = approveUrl;

@@ -45,15 +45,13 @@ function getBaseUrl() {
 
 export default async function handler(req, res) {
   // Log della richiesta per debug
-  console.log('Richiesta ricevuta su /api/approve');
-  console.log('Query params:', req.query);
+  console.log('Query parameters:', req.query);
   console.log('Method:', req.method);
-  console.log('Headers:', JSON.stringify(req.headers, null, 2));
-  
+
   // Abilita CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
 
   // Gestisci preflight CORS
   if (req.method === 'OPTIONS') {
@@ -61,40 +59,31 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Estraggo i parametri dalla query
-    let { email, id, modifiedMessage, skipHubspot } = req.query;
+    // Ottieni i parametri dalla query
+    const { email, id, modifiedMessage, skipHubspot, formDetails } = req.query;
     
     console.log('Parametri ricevuti:');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
     console.log('- id:', typeof id, id ? 'presente' : 'mancante');
     console.log('- modifiedMessage:', typeof modifiedMessage, modifiedMessage ? 'presente (lunghezza: ' + modifiedMessage.length + ')' : 'mancante');
     console.log('- skipHubspot:', skipHubspot);
+    console.log('- formDetails:', formDetails);
     
     // Recupera il messaggio
-    let message;
-    
-    // Se è stato fornito un messaggio modificato direttamente, utilizziamo quello
-    if (modifiedMessage) {
-      try {
-        message = decodeURIComponent(modifiedMessage);
-        console.log('Utilizzo messaggio modificato fornito nell\'URL');
-      } catch (decodeError) {
-        console.error('Errore decodifica messaggio modificato:', decodeError);
-      }
-    }
+    let messageToUse = modifiedMessage;
     
     // Se non abbiamo ancora un messaggio valido e c'è un ID, prova a recuperare dalla variabile globale
-    if (!message && id) {
-      message = global[`message_${id}`];
+    if (!messageToUse && id) {
+      messageToUse = global[`message_${id}`];
       console.log('Recupero messaggio da ID:', id);
-      console.log('Messaggio trovato nella variabile globale:', message ? 'Sì (lunghezza: ' + message.length + ')' : 'No');
+      console.log('Messaggio trovato nella variabile globale:', messageToUse ? 'Sì (lunghezza: ' + messageToUse.length + ')' : 'No');
     }
 
     // Ottieni l'URL base corrente per i link
     const baseUrl = getBaseUrl();
 
     // Se non abbiamo un messaggio ma abbiamo un ID, mostriamo una pagina di recupero che utilizzerà localStorage
-    if (!message && id) {
+    if (!messageToUse && id) {
       console.log('Messaggio non trovato in memoria, tentativo di recupero da localStorage');
       
       res.setHeader('Content-Type', 'text/html');
@@ -223,7 +212,8 @@ export default async function handler(req, res) {
             <script>
               const messageId = "${id}";
               const email = "${email || 'no-reply@extendi.it'}";
-              const skipHubspot = "${skipHubspot}";
+              const skipHubspot = ${skipHubspot === 'true'};
+              const formDetailsFromQuery = ${formDetails ? `"${formDetails}"` : 'null'};
               const baseUrl = "${baseUrl}";
               
               // Funzione per salvare il messaggio nel localStorage
@@ -315,7 +305,7 @@ export default async function handler(req, res) {
     }
 
     console.log('Approvazione ricevuta per:', email);
-    console.log('Messaggio da inviare (lunghezza):', message.length);
+    console.log('Messaggio da inviare (lunghezza):', messageToUse.length);
 
     // Se skipHubspot è presente e non false, mostra la pagina di modifica
     // altrimenti procedi con il salvataggio su HubSpot
@@ -433,7 +423,7 @@ export default async function handler(req, res) {
                 <div class="editor">
                   <div class="form-group">
                     <label for="messageText">Testo del messaggio:</label>
-                    <textarea id="messageText">${message}</textarea>
+                    <textarea id="messageText">${messageToUse}</textarea>
                   </div>
                 </div>
                 <div class="preview">
@@ -476,8 +466,17 @@ export default async function handler(req, res) {
                 const modifiedText = textarea.value;
                 const encodedText = encodeURIComponent(modifiedText);
                 
+                // Recupera i dettagli del form da localStorage o dalla query
+                let formDetailsParam = '';
+                const storedFormDetails = localStorage.getItem('formDetails_' + messageId);
+                if (storedFormDetails) {
+                  formDetailsParam = "&formDetails=" + encodeURIComponent(storedFormDetails);
+                } else if (formDetailsFromQuery) {
+                  formDetailsParam = "&formDetails=" + encodeURIComponent(formDetailsFromQuery);
+                }
+                
                 // Crea l'URL con il messaggio modificato e skipHubspot=false
-                const url = '${baseUrl}/api/approve?email=${encodeURIComponent(email)}&modifiedMessage=' + encodedText + '&skipHubspot=false';
+                const url = '${baseUrl}/api/approve?email=${encodeURIComponent(email)}&modifiedMessage=' + encodedText + '&skipHubspot=false' + formDetailsParam;
                 
                 // Reindirizza alla pagina di approvazione con il messaggio modificato
                 window.location.href = url;
@@ -489,7 +488,7 @@ export default async function handler(req, res) {
     }
 
     // Se siamo qui, dobbiamo salvare su HubSpot
-    await sendHubSpotEmail(email, message);
+    await sendHubSpotEmail(email, messageToUse, formDetails);
     
     // Invia messaggio di conferma a Slack
     await sendApprovalConfirmationToSlack(email);
@@ -633,7 +632,7 @@ export default async function handler(req, res) {
             });
             
             // Prendi il messaggio grezzo e renderizzalo come Markdown
-            const rawMessage = ${JSON.stringify(message)};
+            const rawMessage = ${JSON.stringify(messageToUse)};
             document.getElementById('markdown-content').innerHTML = marked.parse(rawMessage);
           </script>
         </body>
@@ -646,15 +645,51 @@ export default async function handler(req, res) {
 }
 
 // funzione per inviare email su HubSpot
-export async function sendHubSpotEmail(email, message) {
+export async function sendHubSpotEmail(email, message, formDetailsString) {
   try {
     console.log('Invio email a:', email);
     
     // Costruisci l'intestazione dell'email
     const oggetto = "Grazie per averci contattato";
 
+    // Prepara il corpo dell'email con le informazioni di contesto
+    let emailBody = message;
+    
+    // Se ci sono i dettagli del form, li aggiungiamo in fondo
+    if (formDetailsString) {
+      try {
+        const details = JSON.parse(decodeURIComponent(formDetailsString));
+        emailBody += `\n\n------------------\n`;
+        emailBody += `INFORMAZIONI RICHIESTA ORIGINALE:\n\n`;
+        
+        if (details.firstname || details.lastname) {
+          emailBody += `Nome: ${details.firstname || ''} ${details.lastname || ''}\n`;
+        }
+        
+        if (details.company) {
+          emailBody += `Azienda: ${details.company}\n`;
+        }
+        
+        if (details.project_type) {
+          emailBody += `Tipo Progetto: ${details.project_type}\n`;
+        }
+        
+        if (details.budget) {
+          emailBody += `Budget: ${details.budget}\n`;
+        }
+        
+        if (details.message) {
+          emailBody += `\nMessaggio Originale:\n${details.message}\n`;
+        }
+        
+      } catch (error) {
+        console.error('Errore nel parsing dei dettagli del form:', error);
+        // Continuiamo senza aggiungere i dettagli
+      }
+    }
+
     // Invia prima l'email tramite Gmail API
-    await sendGmailEmail(email, oggetto, message);
+    await sendGmailEmail(email, oggetto, emailBody);
     
     // Usa l'API di engagement di HubSpot per registrare l'attività email
     const engagementUrl = 'https://api.hubapi.com/engagements/v1/engagements';
@@ -674,7 +709,7 @@ export async function sendHubSpotEmail(email, message) {
         },
         to: [{ email: email }],
         subject: oggetto,
-        text: message
+        text: emailBody
       }
     };
     
@@ -734,7 +769,7 @@ export async function sendHubSpotEmail(email, message) {
       const noteUrl = `https://api.hubapi.com/crm/v3/objects/notes`;
       const noteBody = {
         properties: {
-          hs_note_body: `Email inviata a ${email}:\n\n${message}`,
+          hs_note_body: `Email inviata a ${email}:\n\n${emailBody}`,
           hs_timestamp: Date.now()
         }
       };

@@ -69,11 +69,24 @@ async function sendMessageToSlack(formData, qualificationText) {
     // Genera un ID univoco per il messaggio
     const messageId = Date.now().toString();
 
+    // Crea un oggetto con i dettagli del form che vogliamo passare
+    const formDetails = {
+      firstname: formData.firstname || '',
+      lastname: formData.lastname || '',
+      company: formData.company || '',
+      project_type: formData.project_type || '',
+      budget: formData.budget || '',
+      message: formData.message || ''
+    };
+    
+    // Codifica i dettagli del form come JSON e poi in URL-safe
+    const encodedFormDetails = encodeURIComponent(JSON.stringify(formDetails));
+
     // Crea l'URL della pagina intermedia che salverà il messaggio in localStorage
-    const saveUrl = `${baseUrl}/api/save-message?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}`;
+    const saveUrl = `${baseUrl}/api/save-message?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&formDetails=${encodedFormDetails}`;
     
     // Crea l'URL per inviare direttamente l'email e salvare su Hubspot
-    const sendEmailUrl = `${baseUrl}/api/send-direct-email?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&saveToHubspot=true`;
+    const sendEmailUrl = `${baseUrl}/api/send-direct-email?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&saveToHubspot=true&formDetails=${encodedFormDetails}`;
 
     // Log per debug
     console.log('Email usata nell\'URL:', formData.email);
