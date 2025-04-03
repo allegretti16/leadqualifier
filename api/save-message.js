@@ -21,7 +21,14 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Ottieni i parametri dalla query
     const { id, message, email, formDetails } = req.query;
+    
+    console.log('Query params ricevuti:', { id, email, formDetailsType: typeof formDetails });
+    console.log('Message length:', message ? message.length : 0);
+    if (formDetails) {
+      console.log('FormDetails length:', formDetails.length);
+    }
 
     // Verifica che l'email sia presente e valida
     if (!email || !email.includes('@')) {
@@ -33,8 +40,14 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'ID messaggio mancante' });
     }
 
+    // Crea URL per l'approvazione
     const baseUrl = getBaseUrl();
-    const approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=true${formDetails ? `&formDetails=${encodeURIComponent(formDetails)}` : ''}`;
+    let approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=true`;
+    
+    // Aggiungi formDetails solo se presente
+    if (formDetails) {
+      approveUrl += `&formDetails=${encodeURIComponent(formDetails)}`;
+    }
 
     // Restituisci una pagina HTML che salva il messaggio in localStorage e poi reindirizza
     res.setHeader('Content-Type', 'text/html');
@@ -105,20 +118,19 @@ export default async function handler(req, res) {
           </div>
           
           <script>
-            const messageId = "${id}";
-            const email = "${email}";
-            const message = ${JSON.stringify(message || '')};
-            const approveUrl = "${approveUrl}";
-            
-            // Gestione sicura dei dettagli del form
-            let formDetails = null;
-            try {
-              formDetails = ${formDetails ? `JSON.parse(decodeURIComponent("${encodeURIComponent(formDetails)}"))` : 'null'};
-              console.log('FormDetails inizializzato:', formDetails);
-            } catch (e) {
-              console.error('Errore nell\'inizializzazione di formDetails:', e);
+            // Salvataggio sicuro in localStorage con log
+            function safeStore(key, value) {
+              try {
+                localStorage.setItem(key, value);
+                console.log('Salvato con successo:', key);
+                return true;
+              } catch (e) {
+                console.error('Errore nel salvataggio di ' + key + ':', e);
+                return false;
+              }
             }
             
+            // Mostra errore
             function showError(message) {
               const errorDiv = document.getElementById('error');
               errorDiv.textContent = message;
@@ -127,24 +139,34 @@ export default async function handler(req, res) {
             }
             
             try {
-              // Salva il messaggio in localStorage
-              localStorage.setItem('message_' + messageId, message);
-              console.log('Messaggio salvato nel localStorage');
+              // Inizializza le variabili
+              const messageId = "${id}";
+              const email = "${email}";
+              const messageText = ${JSON.stringify(message || '')};
+              const approveUrl = "${approveUrl}";
+              
+              // Salva il messaggio nel localStorage
+              safeStore('message_' + messageId, messageText);
               
               // Salva anche l'email per sicurezza
-              localStorage.setItem('email_' + messageId, email);
+              safeStore('email_' + messageId, email);
               
-              // Salva i dettagli del form se presenti
-              if (formDetails) {
-                const formDetailsStr = JSON.stringify(formDetails);
-                localStorage.setItem('formDetails_' + messageId, formDetailsStr);
-                console.log('Dettagli form salvati:', formDetailsStr);
+              // Gestione dei dettagli del form
+              ${formDetails ? `
+              try {
+                // Salva i dettagli del form direttamente
+                const formDetailsStr = ${JSON.stringify(formDetails)};
+                safeStore('formDetails_' + messageId, formDetailsStr);
+              } catch (formError) {
+                console.error('Errore nel salvataggio dei dettagli del form:', formError);
               }
+              ` : ''}
               
               // Reindirizza alla pagina di approvazione
+              console.log('Reindirizzamento a:', approveUrl);
               window.location.href = approveUrl;
             } catch (error) {
-              console.error('Errore nel salvataggio:', error);
+              console.error('Errore nel processo di salvataggio:', error);
               showError('Si è verificato un errore durante il salvataggio del messaggio: ' + error.message);
             }
           </script>
