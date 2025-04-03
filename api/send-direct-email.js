@@ -121,16 +121,14 @@ export default async function handler(req, res) {
       }
     }
 
-    // Se saveToHubspot è true, salva anche su Hubspot
+    // Se saveToHubspot è true, usa sendHubSpotEmail (che già include l'invio dell'email)
     if (saveToHubspot === 'true') {
       console.log('Salvataggio su Hubspot richiesto');
-      // Prima stavo inviando la mail due volte
-      // await sendGmailEmail(email, 'Grazie per averci contattato', emailBody);
-      
-      // Invio email e salvo su HubSpot in un solo passaggio
+      // Non c'è bisogno di chiamare separatamente sendGmailEmail perché sendHubSpotEmail già lo include
       await sendHubSpotEmail(email, emailBody, formDetails);
     } else {
-      // Solo se non salvo su HubSpot invio la mail direttamente
+      // Solo invio diretto email senza HubSpot
+      console.log('Solo invio email senza HubSpot');
       await sendGmailEmail(email, 'Grazie per averci contattato', emailBody);
     }
 
