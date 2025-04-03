@@ -46,6 +46,7 @@ export default async function handler(req, res) {
   // Log della richiesta per debug
   console.log('Query parameters:', req.query);
   console.log('Method:', req.method);
+  console.log('Body:', req.body);
 
   // Abilita CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -58,8 +59,16 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Ottieni i parametri dalla query
-    const { email, id, modifiedMessage, skipHubspot, formDetails } = req.query;
+    // Estrai i parametri dalla richiesta (supporta sia GET che POST)
+    let params;
+    if (req.method === 'POST') {
+      params = req.body || {};
+    } else {
+      params = req.query || {};
+    }
+    
+    // Ottieni i parametri dalla richiesta
+    const { email, id, modifiedMessage, skipHubspot, formDetails } = params;
     
     console.log('Parametri ricevuti:');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
@@ -317,7 +326,7 @@ export default async function handler(req, res) {
 
     // Se skipHubspot è presente e non false, mostra la pagina di modifica
     // altrimenti procedi con il salvataggio su HubSpot
-    if (skipHubspot !== 'false') {
+    if (skipHubspot !== 'false' && skipHubspot !== false) {
       // Pagina di modifica del messaggio
       const baseUrl = getBaseUrl();
       res.setHeader('Content-Type', 'text/html');
@@ -474,6 +483,20 @@ export default async function handler(req, res) {
                 const modifiedText = textarea.value;
                 const encodedText = encodeURIComponent(modifiedText);
                 
+                // Mostra un messaggio di elaborazione
+                const loadingMessage = document.createElement('div');
+                loadingMessage.style.position = 'fixed';
+                loadingMessage.style.top = '0';
+                loadingMessage.style.left = '0';
+                loadingMessage.style.width = '100%';
+                loadingMessage.style.padding = '10px';
+                loadingMessage.style.backgroundColor = '#4CAF50';
+                loadingMessage.style.color = 'white';
+                loadingMessage.style.textAlign = 'center';
+                loadingMessage.style.zIndex = '1000';
+                loadingMessage.textContent = 'Elaborazione in corso...';
+                document.body.appendChild(loadingMessage);
+                
                 // Recupera i dettagli del form da localStorage o dalla query
                 let formDetailsParam = '';
                 
@@ -503,8 +526,32 @@ export default async function handler(req, res) {
                 
                 console.log('URL di reindirizzamento:', url);
                 
-                // Reindirizza alla pagina di approvazione con il messaggio modificato
-                window.location.href = url;
+                // Usa un approccio alternativo con un form invece di window.location per gestire URL lunghi
+                const form = document.createElement('form');
+                form.method = 'POST';
+                form.action = baseUrl + '/api/approve';
+                
+                // Aggiungi i campi come input hidden
+                const addField = (name, value) => {
+                  const input = document.createElement('input');
+                  input.type = 'hidden';
+                  input.name = name;
+                  input.value = value;
+                  form.appendChild(input);
+                };
+                
+                addField('email', email);
+                addField('modifiedMessage', modifiedText);
+                addField('skipHubspot', 'false');
+                
+                // Aggiungi formDetails se presente
+                if (storedFormDetails || formDetailsFromQuery) {
+                  addField('formDetails', storedFormDetails || JSON.stringify(formDetailsFromQuery));
+                }
+                
+                // Aggiungi il form al documento e invialo
+                document.body.appendChild(form);
+                form.submit();
               }
             </script>
           </body>
