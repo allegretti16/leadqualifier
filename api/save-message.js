@@ -24,7 +24,8 @@ export default async function handler(req, res) {
     // Ottieni i parametri dalla query
     const { id, message, email, formDetails } = req.query;
     
-    console.log('Query params ricevuti:', { id, email, formDetailsType: typeof formDetails });
+    console.log('Query params ricevuti:', { id, email, formDetailsLength: formDetails ? formDetails.length : 0 });
+    console.log('FormDetails (primi 100 caratteri):', formDetails ? formDetails.substring(0, 100) + '...' : 'non presente');
     console.log('Message length:', message ? message.length : 0);
     if (formDetails) {
       console.log('FormDetails length:', formDetails.length);

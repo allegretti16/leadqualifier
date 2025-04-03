@@ -121,17 +121,17 @@ export default async function handler(req, res) {
       }
     }
 
-    // Invia l'email tramite Gmail API
-    await sendGmailEmail(
-      email, 
-      'Grazie per averci contattato', // Oggetto email
-      emailBody
-    );
-
     // Se saveToHubspot è true, salva anche su Hubspot
     if (saveToHubspot === 'true') {
       console.log('Salvataggio su Hubspot richiesto');
+      // Prima stavo inviando la mail due volte
+      // await sendGmailEmail(email, 'Grazie per averci contattato', emailBody);
+      
+      // Invio email e salvo su HubSpot in un solo passaggio
       await sendHubSpotEmail(email, emailBody, formDetails);
+    } else {
+      // Solo se non salvo su HubSpot invio la mail direttamente
+      await sendGmailEmail(email, 'Grazie per averci contattato', emailBody);
     }
 
     // Invia una conferma su Slack

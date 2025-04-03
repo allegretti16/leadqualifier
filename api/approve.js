@@ -63,8 +63,10 @@ export default async function handler(req, res) {
     let params;
     if (req.method === 'POST') {
       params = req.body || {};
+      console.log('POST body ricevuto:', JSON.stringify(req.body));
     } else {
       params = req.query || {};
+      console.log('GET params ricevuti:', JSON.stringify(req.query));
     }
     
     // Ottieni i parametri dalla richiesta
@@ -538,6 +540,14 @@ export default async function handler(req, res) {
                   console.error('Errore nel salvare il messaggio di backup:', e);
                 }
                 
+                // Prepara i formDetails per l'invio
+                let formDetailsParam = null;
+                if (formDetailsFromQuery) {
+                  console.log('FormDetails da includere nella richiesta POST:', formDetailsFromQuery);
+                  // Se è già una stringa JSON valida, usala direttamente
+                  formDetailsParam = formDetailsFromQuery;
+                }
+                
                 // Utilizza il metodo FETCH POST per inviare i dati al server
                 fetch(baseUrl + '/api/approve', {
                   method: 'POST',
@@ -548,7 +558,7 @@ export default async function handler(req, res) {
                     email: email,
                     modifiedMessage: modifiedText,
                     skipHubspot: false,
-                    formDetails: formDetailsFromQuery || null
+                    formDetails: formDetailsParam
                   })
                 })
                 .then(response => {
@@ -741,6 +751,7 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
   try {
     console.log('Invio email a:', email);
     console.log('formDetailsString tipo:', typeof formDetailsString);
+    console.log('Valore completo formDetailsString:', formDetailsString);
     
     // Costruisci l'intestazione dell'email
     const oggetto = "Grazie per averci contattato";
@@ -757,14 +768,18 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
         if (typeof formDetailsString === 'object' && formDetailsString !== null) {
           // Già un oggetto
           formDetailsObj = formDetailsString;
+          console.log('FormDetails è già un oggetto:', formDetailsObj);
         } else if (typeof formDetailsString === 'string') {
           // Stringa JSON o stringa URL-encoded
           let jsonStr = formDetailsString;
+          console.log('FormDetails è una stringa, lunghezza:', formDetailsString.length);
           
           // Se è una stringa URL-encoded, decodificala
           if (formDetailsString.includes('%')) {
             try {
+              console.log('Provo a decodificare URL-encoded string...');
               jsonStr = decodeURIComponent(formDetailsString);
+              console.log('Stringa decodificata con successo, lunghezza:', jsonStr.length);
             } catch (e) {
               console.error('Errore nella decodifica URL:', e);
             }
@@ -772,14 +787,19 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
           
           // Tenta di parsare il JSON
           try {
+            console.log('Provo a parsare il JSON...');
             formDetailsObj = JSON.parse(jsonStr);
+            console.log('JSON parsato con successo:', formDetailsObj);
           } catch (e) {
             console.error('Errore nel parsing JSON:', e);
+            console.error('Contenuto che ha causato errore:', jsonStr);
             // Fallback di sicurezza
             formDetailsObj = {};
           }
         } else {
           // Fallback per altri casi
+          console.log('FormDetails non è né un oggetto né una stringa:',
+                      typeof formDetailsString);
           formDetailsObj = {};
         }
         

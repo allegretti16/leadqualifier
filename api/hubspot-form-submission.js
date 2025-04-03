@@ -79,6 +79,8 @@ async function sendMessageToSlack(formData, qualificationText) {
       message: formData.message || ''
     };
     
+    console.log('Form Details creati:', formDetails);
+    
     // Codifica i dettagli del form come JSON e poi in URL-safe
     const encodedFormDetails = encodeURIComponent(JSON.stringify(formDetails));
 
@@ -87,6 +89,8 @@ async function sendMessageToSlack(formData, qualificationText) {
     
     // Crea l'URL per inviare direttamente l'email e salvare su Hubspot
     const sendEmailUrl = `${baseUrl}/api/send-direct-email?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&saveToHubspot=true&formDetails=${encodedFormDetails}`;
+    
+    console.log('URL Invia e salva costruito:', sendEmailUrl);
 
     // Log per debug
     console.log('Email usata nell\'URL:', formData.email);
