@@ -4,8 +4,7 @@ import { sendGmailEmail } from './send-email';
 // Funzione per inviare messaggio di conferma a Slack
 async function sendApprovalConfirmationToSlack(email) {
   try {
-    const message = `✅ *APPROVATO* - La risposta per ${email} è stata approvata e registrata in HubSpot
-    \n 🚫*NON INVIATA*`;
+    const message = `✅ *SALVATA E INVIATA* - La risposta per ${email} è stata inviata e registrata in HubSpot`;
     
     const result = await fetch("https://slack.com/api/chat.postMessage", {
       method: "POST",
@@ -476,7 +475,7 @@ export default async function handler(req, res) {
                 }
                 
                 // Crea l'URL con il messaggio modificato e skipHubspot=false
-                const url = '${baseUrl}/api/approve?email=${encodeURIComponent(email)}&modifiedMessage=' + encodedText + '&skipHubspot=false' + formDetailsParam;
+                const url = baseUrl + '/api/approve?email=' + encodeURIComponent(email) + '&modifiedMessage=' + encodedText + '&skipHubspot=false' + formDetailsParam;
                 
                 // Reindirizza alla pagina di approvazione con il messaggio modificato
                 window.location.href = url;
