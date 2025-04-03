@@ -708,7 +708,7 @@ export default async function handler(req, res) {
             });
             
             // Prendi il messaggio grezzo e renderizzalo come Markdown
-            const rawMessage = "${messageToUse.replace(/"/g, '\\"').replace(/\n/g, '\\n')}";
+            const rawMessage = ${JSON.stringify(messageToUse)};
             document.getElementById('markdown-content').innerHTML = marked.parse(rawMessage);
           </script>
         </body>
