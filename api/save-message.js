@@ -145,8 +145,18 @@ export default async function handler(req, res) {
               const messageText = ${JSON.stringify(message || '')};
               const approveUrl = "${approveUrl}";
               
+              // Debug
+              console.log('====== SALVATAGGIO DATI ======');
+              console.log('ID:', messageId);
+              console.log('Email:', email);
+              console.log('Messaggio (primi 50 caratteri):', messageText.substring(0, 50));
+              console.log('URL approvazione:', approveUrl);
+              
               // Salva il messaggio nel localStorage
-              safeStore('message_' + messageId, messageText);
+              const saveResult = safeStore('message_' + messageId, messageText);
+              if (!saveResult) {
+                throw new Error('Impossibile salvare il messaggio nel localStorage');
+              }
               
               // Salva anche l'email per sicurezza
               safeStore('email_' + messageId, email);
@@ -156,15 +166,22 @@ export default async function handler(req, res) {
               try {
                 // Salva i dettagli del form direttamente
                 const formDetailsStr = ${JSON.stringify(formDetails)};
+                console.log('Form details (primi 50 caratteri):', formDetailsStr.substring(0, 50));
                 safeStore('formDetails_' + messageId, formDetailsStr);
               } catch (formError) {
                 console.error('Errore nel salvataggio dei dettagli del form:', formError);
               }
               ` : ''}
               
+              // Test di verifica salvataggio
+              const testSaved = localStorage.getItem('message_' + messageId);
+              console.log('Verifica salvataggio:', testSaved ? 'OK (primi 50 caratteri): ' + testSaved.substring(0, 50) : 'FALLITO');
+              
               // Reindirizza alla pagina di approvazione
               console.log('Reindirizzamento a:', approveUrl);
-              window.location.href = approveUrl;
+              setTimeout(function() {
+                window.location.href = approveUrl;
+              }, 500);
             } catch (error) {
               console.error('Errore nel processo di salvataggio:', error);
               showError('Si è verificato un errore durante il salvataggio del messaggio: ' + error.message);

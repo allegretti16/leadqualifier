@@ -68,17 +68,18 @@ export default async function handler(req, res) {
     }
     
     // Ottieni i parametri dalla richiesta
-    const { email, id, modifiedMessage, skipHubspot, formDetails } = params;
+    const { email, id, modifiedMessage, skipHubspot, formDetails, message } = params;
     
     console.log('Parametri ricevuti:');
     console.log('- email:', typeof email, email ? 'presente' : 'mancante');
     console.log('- id:', typeof id, id ? 'presente' : 'mancante');
     console.log('- modifiedMessage:', typeof modifiedMessage, modifiedMessage ? 'presente (lunghezza: ' + modifiedMessage.length + ')' : 'mancante');
+    console.log('- message:', typeof message, message ? 'presente (lunghezza: ' + message.length + ')' : 'mancante');
     console.log('- skipHubspot:', skipHubspot);
-    console.log('- formDetails:', formDetails);
+    console.log('- formDetails:', typeof formDetails, formDetails ? 'presente' : 'mancante');
     
-    // Recupera il messaggio
-    let messageToUse = modifiedMessage;
+    // Recupera il messaggio da uno dei parametri disponibili
+    let messageToUse = modifiedMessage || message;
     
     // Se non abbiamo ancora un messaggio valido e c'è un ID, prova a recuperare dalla variabile globale
     if (!messageToUse && id) {
@@ -94,6 +95,7 @@ export default async function handler(req, res) {
     if (!messageToUse && id) {
       console.log('Messaggio non trovato in memoria, tentativo di recupero da localStorage');
       
+      // Pagina di recupero dati da localStorage
       res.setHeader('Content-Type', 'text/html');
       return res.status(200).send(`
         <!DOCTYPE html>
@@ -197,118 +199,129 @@ export default async function handler(req, res) {
           </head>
           <body>
             <div class="container">
-              <div class="icon">⚙️</div>
-              <h1>Recupero messaggio in corso</h1>
-              <p>Il server è stato riavviato e il messaggio originale è stato perso.</p>
-              <p>Se non è la prima volta che apri questa pagina, potresti avere il messaggio salvato nel browser.</p>
-              
-              <div id="automatic-recovery">
-                <p><span class="spinner"></span> Tentativo di recupero automatico...</p>
-              </div>
-              
-              <div id="manual-entry" class="hidden">
-                <p>Non è stato possibile recuperare automaticamente il messaggio. Per favore, inserisci manualmente il messaggio da approvare:</p>
-                <div class="form">
-                  <textarea id="messageText" class="textarea" placeholder="Inserisci qui il messaggio..."></textarea>
-                  <button onclick="submitMessage()" class="button">Continua</button>
-                </div>
-              </div>
-              
-              <div id="status-message" class="message hidden"></div>
+              <div class="spinner"></div>
+              <h1>Recupero Messaggio</h1>
+              <p>Stiamo recuperando il messaggio dal localStorage...</p>
+              <div id="status"></div>
+              <div id="debug" style="margin-top: 20px; font-size: 12px; color: #777; text-align: left; display: none;"></div>
+              <button id="debugBtn" style="margin-top: 20px; padding: 5px 10px; font-size: 12px; background: #eee; border: 1px solid #ccc; cursor: pointer;">Mostra Debug</button>
             </div>
             
             <script>
+              // Elementi UI
+              const statusEl = document.getElementById('status');
+              const debugEl = document.getElementById('debug');
+              const debugBtn = document.getElementById('debugBtn');
+              const spinner = document.querySelector('.spinner');
+              
+              // Parametri della pagina
               const messageId = "${id}";
               const email = "${email || 'no-reply@extendi.it'}";
               const skipHubspot = ${skipHubspot === 'true'};
-              
-              // Inizializzazione sicura di formDetailsFromQuery
-              let formDetailsFromQuery = null;
-              try {
-                ${formDetails ? `formDetailsFromQuery = JSON.parse(decodeURIComponent("${encodeURIComponent(formDetails)}"));` : ''}
-                console.log('FormDetailsFromQuery inizializzato:', formDetailsFromQuery);
-              } catch (e) {
-                console.error('Errore nell\'inizializzazione di formDetailsFromQuery:', e);
-              }
-              
               const baseUrl = "${baseUrl}";
               
-              // Funzione per salvare il messaggio nel localStorage
-              function saveMessageToLocalStorage(id, message) {
-                try {
-                  localStorage.setItem('message_' + id, message);
-                  console.log('Messaggio salvato nel localStorage');
-                  return true;
-                } catch (error) {
-                  console.error('Errore nel salvataggio nel localStorage:', error);
-                  return false;
-                }
+              // Informazioni di debug
+              let debugInfo = [];
+              
+              // Funzione per aggiungere info di debug
+              function logDebug(msg) {
+                console.log(msg);
+                debugInfo.push(msg);
+                debugEl.innerHTML = debugInfo.map(item => '<div>' + item + '</div>').join('');
               }
               
-              // Funzione per recuperare il messaggio dal localStorage
-              function getMessageFromLocalStorage(id) {
-                try {
-                  return localStorage.getItem('message_' + id);
-                } catch (error) {
-                  console.error('Errore nel recupero dal localStorage:', error);
-                  return null;
-                }
-              }
-              
-              // Funzione per mostrare messaggi di stato
-              function showStatusMessage(message, isError = false) {
-                const statusElement = document.getElementById('status-message');
-                statusElement.textContent = message;
-                statusElement.className = 'message ' + (isError ? 'error' : 'success');
-                statusElement.classList.remove('hidden');
-              }
-              
-              // Funzione per continuare il processo con un messaggio
-              function continueWithMessage(message) {
-                // Salva il messaggio nel localStorage per future visite
-                saveMessageToLocalStorage(messageId, message);
+              // Funzione per aggiornare lo stato
+              function updateStatus(msg, isError = false) {
+                statusEl.innerHTML = msg;
+                statusEl.style.padding = '10px';
+                statusEl.style.marginTop = '20px';
+                statusEl.style.borderRadius = '4px';
                 
-                // Crea l'URL con il messaggio e reindirizza
-                const encodedMessage = encodeURIComponent(message);
-                const continueUrl = baseUrl + '/api/approve?email=' + encodeURIComponent(email) + 
-                                   '&skipHubspot=' + skipHubspot + 
-                                   '&modifiedMessage=' + encodedMessage;
-                
-                window.location.href = continueUrl;
-              }
-              
-              // Funzione per inviare il messaggio inserito manualmente
-              function submitMessage() {
-                const textareaElement = document.getElementById('messageText');
-                const message = textareaElement.value.trim();
-                
-                if (!message) {
-                  showStatusMessage('Per favore, inserisci un messaggio valido', true);
-                  return;
-                }
-                
-                continueWithMessage(message);
-              }
-              
-              // Funzione principale che si avvia al caricamento della pagina
-              function init() {
-                // Tenta di recuperare dal localStorage
-                const savedMessage = getMessageFromLocalStorage(messageId);
-                
-                if (savedMessage) {
-                  console.log('Messaggio recuperato dal localStorage');
-                  setTimeout(() => {
-                    continueWithMessage(savedMessage);
-                  }, 1000); // Piccolo ritardo per mostrare l'animazione
+                if (isError) {
+                  statusEl.style.backgroundColor = '#ffebee';
+                  statusEl.style.color = '#d32f2f';
+                  statusEl.style.border = '1px solid #ffcdd2';
+                  spinner.style.display = 'none';
                 } else {
-                  console.log('Nessun messaggio trovato nel localStorage');
-                  document.getElementById('automatic-recovery').classList.add('hidden');
-                  document.getElementById('manual-entry').classList.remove('hidden');
+                  statusEl.style.backgroundColor = '#e8f5e9';
+                  statusEl.style.color = '#388e3c';
+                  statusEl.style.border = '1px solid #c8e6c9';
                 }
               }
               
-              // Avvia il processo di recupero
-              window.onload = init;
+              // Mostra/nascondi debug
+              debugBtn.addEventListener('click', function() {
+                if (debugEl.style.display === 'none') {
+                  debugEl.style.display = 'block';
+                  this.textContent = 'Nascondi Debug';
+                } else {
+                  debugEl.style.display = 'none';
+                  this.textContent = 'Mostra Debug';
+                }
+              });
+              
+              // Funzione principale
+              async function init() {
+                try {
+                  // Logga tutte le chiavi in localStorage per debug
+                  const allKeys = Object.keys(localStorage);
+                  logDebug('Tutte le chiavi in localStorage: ' + allKeys.join(', '));
+                  
+                  // Recupero messaggio
+                  const messageKey = 'message_' + messageId;
+                  const savedMessage = localStorage.getItem(messageKey);
+                  
+                  logDebug('Chiave messaggio: ' + messageKey);
+                  logDebug('Messaggio trovato: ' + (savedMessage ? 'Sì' : 'No'));
+                  
+                  if (!savedMessage) {
+                    updateStatus('Non è stato possibile recuperare il messaggio. Torna a Slack e riprova.', true);
+                    return;
+                  }
+                  
+                  // Recupero email di backup
+                  const savedEmail = localStorage.getItem('email_' + messageId) || email;
+                  logDebug('Email: ' + savedEmail);
+                  
+                  // Recupero eventuali dettagli del form
+                  const formDetailsKey = 'formDetails_' + messageId;
+                  const formDetailsStr = localStorage.getItem(formDetailsKey);
+                  logDebug('Dettagli form trovati: ' + (formDetailsStr ? 'Sì' : 'No'));
+                  
+                  // Costruisci l'URL con il messaggio recuperato
+                  const params = new URLSearchParams({
+                    email: savedEmail,
+                    id: messageId,
+                    skipHubspot: skipHubspot
+                  });
+                  
+                  if (savedMessage) {
+                    params.append('message', savedMessage);
+                  }
+                  
+                  if (formDetailsStr) {
+                    params.append('formDetails', formDetailsStr);
+                  }
+                  
+                  const newUrl = '${baseUrl}/api/approve?' + params.toString();
+                  logDebug('Reindirizzamento a: ' + newUrl);
+                  
+                  // Aggiorna lo stato
+                  updateStatus('Messaggio recuperato, reindirizzamento in corso...');
+                  
+                  // Reindirizza
+                  setTimeout(() => {
+                    window.location.href = newUrl;
+                  }, 1000);
+                } catch (error) {
+                  console.error('Errore nel recupero:', error);
+                  logDebug('Errore: ' + error.message);
+                  updateStatus('Si è verificato un errore: ' + error.message, true);
+                }
+              }
+              
+              // Avvia l'inizializzazione
+              init();
             </script>
           </body>
         </html>
