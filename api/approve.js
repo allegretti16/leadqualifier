@@ -652,6 +652,9 @@ async function sendHubSpotEmail(email, message) {
     // Costruisci l'intestazione dell'email
     const oggetto = "Grazie per averci contattato";
 
+    // Invia prima l'email tramite Gmail API
+    await sendGmailEmail(email, oggetto, message);
+    
     // Usa l'API di engagement di HubSpot per registrare l'attività email
     const engagementUrl = 'https://api.hubapi.com/engagements/v1/engagements';
     const engagementPayload = {

@@ -1,5 +1,6 @@
 // Importa la funzione di invio email
 import { sendGmailEmail } from './send-email';
+import { sendHubSpotEmail } from './approve';
 
 // Funzione helper per ottenere l'URL base
 function getBaseUrl() {
@@ -56,7 +57,7 @@ export default async function handler(req, res) {
 
   try {
     // Ottieni i parametri dalla query
-    const { message, email, id } = req.query;
+    const { message, email, id, saveToHubspot } = req.query;
 
     // Verifica che ci siano tutti i parametri necessari
     if (!email || !email.includes('@')) {
@@ -78,6 +79,12 @@ export default async function handler(req, res) {
       'Grazie per averci contattato', // Oggetto email
       message
     );
+
+    // Se saveToHubspot è true, salva anche su Hubspot
+    if (saveToHubspot === 'true') {
+      console.log('Salvataggio su Hubspot richiesto');
+      await sendHubSpotEmail(email, message);
+    }
 
     // Invia una conferma su Slack
     await sendConfirmationToSlack(email);

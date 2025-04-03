@@ -33,7 +33,7 @@ async function sendGmailEmail(to, subject, text) {
 
     // Opzioni email
     const mailOptions = {
-      from: 'Dario Calamandrei <hello@extendi.it>',
+      from: 'Hello Extendi <hello@extendi.it>',
       to: to,
       subject: subject,
       text: text
