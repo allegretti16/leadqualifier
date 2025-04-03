@@ -109,7 +109,15 @@ export default async function handler(req, res) {
             const email = "${email}";
             const message = ${JSON.stringify(message || '')};
             const approveUrl = "${approveUrl}";
-            const formDetails = ${formDetails ? `"${formDetails}"` : 'null'};
+            
+            // Gestione sicura dei dettagli del form
+            let formDetails = null;
+            try {
+              formDetails = ${formDetails ? `JSON.parse(decodeURIComponent("${encodeURIComponent(formDetails)}"))` : 'null'};
+              console.log('FormDetails inizializzato:', formDetails);
+            } catch (e) {
+              console.error('Errore nell\'inizializzazione di formDetails:', e);
+            }
             
             function showError(message) {
               const errorDiv = document.getElementById('error');
@@ -128,8 +136,9 @@ export default async function handler(req, res) {
               
               // Salva i dettagli del form se presenti
               if (formDetails) {
-                localStorage.setItem('formDetails_' + messageId, formDetails);
-                console.log('Dettagli form salvati: ', formDetails);
+                const formDetailsStr = JSON.stringify(formDetails);
+                localStorage.setItem('formDetails_' + messageId, formDetailsStr);
+                console.log('Dettagli form salvati:', formDetailsStr);
               }
               
               // Reindirizza alla pagina di approvazione

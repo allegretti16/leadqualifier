@@ -212,7 +212,16 @@ export default async function handler(req, res) {
               const messageId = "${id}";
               const email = "${email || 'no-reply@extendi.it'}";
               const skipHubspot = ${skipHubspot === 'true'};
-              const formDetailsFromQuery = ${formDetails ? formDetails : 'null'};
+              
+              // Inizializzazione sicura di formDetailsFromQuery
+              let formDetailsFromQuery = null;
+              try {
+                ${formDetails ? `formDetailsFromQuery = JSON.parse(decodeURIComponent("${encodeURIComponent(formDetails)}"));` : ''}
+                console.log('FormDetailsFromQuery inizializzato:', formDetailsFromQuery);
+              } catch (e) {
+                console.error('Errore nell\'inizializzazione di formDetailsFromQuery:', e);
+              }
+              
               const baseUrl = "${baseUrl}";
               
               // Funzione per salvare il messaggio nel localStorage
@@ -467,15 +476,24 @@ export default async function handler(req, res) {
                 
                 // Recupera i dettagli del form da localStorage o dalla query
                 let formDetailsParam = '';
-                const storedFormDetails = localStorage.getItem('formDetails_' + messageId);
                 
-                console.log('storedFormDetails:', storedFormDetails);
-                console.log('formDetailsFromQuery:', formDetailsFromQuery);
-                
-                if (storedFormDetails) {
-                  formDetailsParam = "&formDetails=" + encodeURIComponent(storedFormDetails);
-                } else if (formDetailsFromQuery) {
-                  formDetailsParam = "&formDetails=" + encodeURIComponent(formDetailsFromQuery);
+                try {
+                  // Prima prova dal localStorage
+                  const storedFormDetails = localStorage.getItem('formDetails_' + messageId);
+                  console.log('Dettagli form da localStorage:', storedFormDetails);
+                  
+                  if (storedFormDetails) {
+                    // Verifica che sia un JSON valido
+                    JSON.parse(storedFormDetails);
+                    formDetailsParam = "&formDetails=" + encodeURIComponent(storedFormDetails);
+                  } 
+                  // Se non ci sono dettagli nel localStorage, usa quelli dalla query
+                  else if (formDetailsFromQuery) {
+                    const formDetailsStr = JSON.stringify(formDetailsFromQuery);
+                    formDetailsParam = "&formDetails=" + encodeURIComponent(formDetailsStr);
+                  }
+                } catch (e) {
+                  console.error('Errore nel processare i dettagli del form:', e);
                 }
                 
                 console.log('formDetailsParam:', formDetailsParam);
@@ -660,7 +678,6 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
   try {
     console.log('Invio email a:', email);
     console.log('formDetailsString tipo:', typeof formDetailsString);
-    console.log('formDetailsString valore:', formDetailsString);
     
     // Costruisci l'intestazione dell'email
     const oggetto = "Grazie per averci contattato";
@@ -674,20 +691,19 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
         // Verifica il tipo di formDetailsString e gestisci tutti i casi possibili
         let formDetailsObj;
         
-        if (typeof formDetailsString === 'object') {
+        if (typeof formDetailsString === 'object' && formDetailsString !== null) {
           // Già un oggetto
           formDetailsObj = formDetailsString;
-        } else {
+        } else if (typeof formDetailsString === 'string') {
           // Stringa JSON o stringa URL-encoded
           let jsonStr = formDetailsString;
           
           // Se è una stringa URL-encoded, decodificala
-          if (typeof formDetailsString === 'string' && formDetailsString.includes('%')) {
+          if (formDetailsString.includes('%')) {
             try {
               jsonStr = decodeURIComponent(formDetailsString);
             } catch (e) {
               console.error('Errore nella decodifica URL:', e);
-              // Continua con la stringa originale
             }
           }
           
@@ -699,30 +715,35 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
             // Fallback di sicurezza
             formDetailsObj = {};
           }
+        } else {
+          // Fallback per altri casi
+          formDetailsObj = {};
         }
         
-        // Ora abbiamo un oggetto formDetailsObj da usare
-        emailBody += `\n\n------------------\n`;
-        emailBody += `INFORMAZIONI RICHIESTA ORIGINALE:\n\n`;
-        
-        if (formDetailsObj.firstname || formDetailsObj.lastname) {
-          emailBody += `Nome: ${formDetailsObj.firstname || ''} ${formDetailsObj.lastname || ''}\n`;
-        }
-        
-        if (formDetailsObj.company) {
-          emailBody += `Azienda: ${formDetailsObj.company}\n`;
-        }
-        
-        if (formDetailsObj.project_type) {
-          emailBody += `Tipo Progetto: ${formDetailsObj.project_type}\n`;
-        }
-        
-        if (formDetailsObj.budget) {
-          emailBody += `Budget: ${formDetailsObj.budget}\n`;
-        }
-        
-        if (formDetailsObj.message) {
-          emailBody += `\nMessaggio Originale:\n${formDetailsObj.message}\n`;
+        // Assicuriamoci che formDetailsObj sia un oggetto valido
+        if (formDetailsObj && typeof formDetailsObj === 'object') {
+          emailBody += `\n\n------------------\n`;
+          emailBody += `INFORMAZIONI RICHIESTA ORIGINALE:\n\n`;
+          
+          if (formDetailsObj.firstname || formDetailsObj.lastname) {
+            emailBody += `Nome: ${formDetailsObj.firstname || ''} ${formDetailsObj.lastname || ''}\n`;
+          }
+          
+          if (formDetailsObj.company) {
+            emailBody += `Azienda: ${formDetailsObj.company}\n`;
+          }
+          
+          if (formDetailsObj.project_type) {
+            emailBody += `Tipo Progetto: ${formDetailsObj.project_type}\n`;
+          }
+          
+          if (formDetailsObj.budget) {
+            emailBody += `Budget: ${formDetailsObj.budget}\n`;
+          }
+          
+          if (formDetailsObj.message) {
+            emailBody += `\nMessaggio Originale:\n${formDetailsObj.message}\n`;
+          }
         }
         
       } catch (error) {
