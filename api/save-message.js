@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     }
 
     const baseUrl = getBaseUrl();
-    const approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}`;
+    const approveUrl = `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=true`;
 
     // Restituisci una pagina HTML che salva il messaggio in localStorage e poi reindirizza
     res.setHeader('Content-Type', 'text/html');

@@ -1,4 +1,5 @@
 const { OpenAI } = require('openai');
+import { sendGmailEmail } from './send-email';
 
 // Funzione per inviare messaggio di conferma a Slack
 async function sendApprovalConfirmationToSlack(email) {
@@ -645,7 +646,7 @@ export default async function handler(req, res) {
 }
 
 // funzione per inviare email su HubSpot
-async function sendHubSpotEmail(email, message) {
+export async function sendHubSpotEmail(email, message) {
   try {
     console.log('Invio email a:', email);
     
