@@ -1,5 +1,6 @@
 const { OpenAI } = require('openai');
 import { sendGmailEmail } from './send-email';
+import { getMessage, updateMessage } from '../../utils/supabase';
 
 // Funzione per inviare messaggio di conferma a Slack
 async function sendApprovalConfirmationToSlack(email) {
@@ -59,6 +60,30 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { id, email, skipHubspot, formDetails } = req.query;
+    
+    // Verifica che l'ID sia presente
+    if (!id) {
+      return res.status(400).json({ error: 'ID messaggio mancante' });
+    }
+
+    // Recupera il messaggio da Supabase
+    let messageData;
+    try {
+      messageData = await getMessage(id);
+      if (!messageData) {
+        throw new Error('Messaggio non trovato');
+      }
+    } catch (error) {
+      console.error('Errore nel recupero del messaggio:', error);
+      return res.status(500).json({ error: 'Errore nel recupero del messaggio' });
+    }
+
+    // Verifica che l'email corrisponda
+    if (messageData.email !== email) {
+      return res.status(400).json({ error: 'Email non corrispondente' });
+    }
+
     // Estrai i parametri dalla richiesta (supporta sia GET che POST)
     let params;
     if (req.method === 'POST') {
@@ -70,15 +95,15 @@ export default async function handler(req, res) {
     }
     
     // Ottieni i parametri dalla richiesta
-    const { email, id, modifiedMessage, skipHubspot, formDetails, message } = params;
+    const { modifiedMessage, message } = params;
     
     console.log('Parametri ricevuti:');
-    console.log('- email:', typeof email, email ? 'presente' : 'mancante');
-    console.log('- id:', typeof id, id ? 'presente' : 'mancante');
-    console.log('- modifiedMessage:', typeof modifiedMessage, modifiedMessage ? 'presente (lunghezza: ' + modifiedMessage.length + ')' : 'mancante');
-    console.log('- message:', typeof message, message ? 'presente (lunghezza: ' + message.length + ')' : 'mancante');
-    console.log('- skipHubspot:', skipHubspot);
-    console.log('- formDetails:', typeof formDetails, formDetails ? 'presente' : 'mancante');
+    console.log('- Email:', email);
+    console.log('- ID:', id);
+    console.log('- Skip HubSpot:', skipHubspot);
+    console.log('- Form Details:', formDetails ? 'presente' : 'non presente');
+    console.log('- Message:', message ? 'presente' : 'non presente');
+    console.log('- Modified Message:', modifiedMessage ? 'presente' : 'non presente');
     
     // Recupera il messaggio da uno dei parametri disponibili
     let messageToUse = modifiedMessage || message;
@@ -595,6 +620,17 @@ export default async function handler(req, res) {
     // Invia messaggio di conferma a Slack
     await sendApprovalConfirmationToSlack(email);
     
+    // Aggiorna lo stato del messaggio in Supabase
+    try {
+      await updateMessage(id, {
+        status: 'approved',
+        approved_at: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Errore nell\'aggiornamento dello stato del messaggio:', error);
+      // Non blocchiamo il flusso se l'aggiornamento fallisce
+    }
+    
     // Restituisci una pagina HTML di conferma
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(`
@@ -741,8 +777,8 @@ export default async function handler(req, res) {
       </html>
     `);
   } catch (error) {
-    console.error('Errore nella gestione approvazione:', error);
-    res.status(500).json({ error: 'Errore interno del server' });
+    console.error('Errore nella gestione della richiesta:', error);
+    return res.status(500).json({ error: error.message });
   }
 }
 
