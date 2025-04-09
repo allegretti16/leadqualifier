@@ -71,15 +71,13 @@ export default async function handler(req, res) {
     }
     
     // Ottieni i parametri dalla richiesta
-    const { id, email, skipHubspot, formDetails, modifiedMessage, message } = params;
+    const { id, email, skipHubspot, modifiedMessage } = params;
     
     console.log('Parametri ricevuti:');
     console.log('- ID:', id);
     console.log('- Email:', email);
     console.log('- Skip HubSpot:', skipHubspot);
-    console.log('- Form Details presente:', !!formDetails);
     console.log('- Modified Message presente:', !!modifiedMessage);
-    console.log('- Message presente:', !!message);
     
     // Verifica che l'ID sia presente
     if (!id) {
@@ -104,125 +102,22 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Email non corrispondente' });
     }
 
-    // Recupera il messaggio da uno dei parametri disponibili
-    let messageToUse = modifiedMessage || message;
+    // Usa il messaggio modificato se presente, altrimenti quello salvato
+    const messageToUse = modifiedMessage || messageData.message_text;
     
-    // Se non abbiamo ancora un messaggio valido e c'è un ID, prova a recuperare da Supabase
-    if (!messageToUse && id) {
-      try {
-        const messageData = await getMessage(id);
-        if (messageData) {
-          messageToUse = messageData.message_text;
-          console.log('Messaggio recuperato da Supabase:', messageToUse ? 'Sì (lunghezza: ' + messageToUse.length + ')' : 'No');
-        } else {
-          console.error('Messaggio non trovato in Supabase con ID:', id);
-          return res.status(400).json({ error: 'Messaggio non trovato nel database. Torna a Slack e riprova.' });
-        }
-      } catch (error) {
-        console.error('Errore nel recupero del messaggio da Supabase:', error);
-        return res.status(400).json({ error: 'Non è stato possibile recuperare il messaggio. Torna a Slack e riprova.' });
-      }
-    }
-
-    // Se non abbiamo ancora un messaggio, restituisci errore
+    // Se non abbiamo un messaggio, restituisci errore
     if (!messageToUse) {
-      console.error('Nessun messaggio disponibile dopo tutti i tentativi di recupero');
+      console.error('Nessun messaggio disponibile');
       return res.status(400).json({ error: 'Messaggio non trovato. Torna a Slack e riprova.' });
     }
 
     // Ottieni l'URL base corrente per i link
     const baseUrl = getBaseUrl();
 
-    // Se non abbiamo un messaggio ma abbiamo un ID, mostriamo una pagina di recupero
-    if (!messageToUse && id) {
-      console.log('Messaggio non trovato in Supabase');
-      
-      // Pagina di errore
-      res.setHeader('Content-Type', 'text/html');
-      return res.status(200).send(`
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>Errore Recupero Messaggio</title>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              body {
-                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-                margin: 0;
-                padding: 20px;
-                background-color: #f9fafb;
-                display: flex;
-                justify-content: center;
-                align-items: center;
-                min-height: 100vh;
-              }
-              .container {
-                background-color: white;
-                padding: 40px;
-                border-radius: 12px;
-                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
-                max-width: 600px;
-                width: 100%;
-                text-align: center;
-              }
-              .error-icon {
-                font-size: 64px;
-                margin-bottom: 20px;
-                color: #f44336;
-              }
-              h1 {
-                color: #2c3e50;
-                margin-bottom: 20px;
-              }
-              p {
-                color: #34495e;
-                line-height: 1.5;
-                margin-bottom: 20px;
-              }
-              .button {
-                display: inline-block;
-                padding: 12px 24px;
-                background-color: #4CAF50;
-                color: white;
-                text-decoration: none;
-                border-radius: 4px;
-                font-weight: 500;
-                transition: background-color 0.3s;
-                border: none;
-                cursor: pointer;
-              }
-              .button:hover {
-                background-color: #43A047;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="container">
-              <div class="error-icon">❌</div>
-              <h1>Errore nel Recupero del Messaggio</h1>
-              <p>Non è stato possibile recuperare il messaggio dal database. Torna a Slack e riprova.</p>
-              <a href="https://app.slack.com" class="button">Torna a Slack</a>
-            </div>
-          </body>
-        </html>
-      `);
-    }
-
-    // Verifica che l'email sia presente e valida
-    if (!email || !email.includes('@')) {
-      console.error('Email mancante o non valida:', email);
-      return res.status(400).json({ error: 'Email mancante o non valida' });
-    }
-
-    console.log('Approvazione ricevuta per:', email);
-    console.log('Messaggio da inviare (lunghezza):', messageToUse.length);
-
     // Se skipHubspot è presente e non false, mostra la pagina di modifica
     // altrimenti procedi con il salvataggio su HubSpot
     if (skipHubspot !== 'false' && skipHubspot !== false) {
       // Pagina di modifica del messaggio
-      const baseUrl = getBaseUrl();
       res.setHeader('Content-Type', 'text/html');
       return res.status(200).send(`
         <!DOCTYPE html>
@@ -355,23 +250,6 @@ export default async function handler(req, res) {
               // Variabili globali necessarie
               const baseUrl = "${baseUrl}";
               const email = "${email}";
-              let formDetailsFromQuery = null;
-              
-              // Recupera i dettagli del form da localStorage
-              try {
-                const formDetailsKey = 'formDetails_' + "${id}";
-                const formDetailsStr = localStorage.getItem(formDetailsKey);
-                if (formDetailsStr) {
-                  formDetailsFromQuery = formDetailsStr;
-                  console.log('Dettagli form recuperati da localStorage');
-                } else {
-                  // Fallback per i dettagli del form dalla query
-                  ${formDetails ? `formDetailsFromQuery = ${JSON.stringify(formDetails)};` : ''}
-                  console.log('Dettagli form dalla query');
-                }
-              } catch (e) {
-                console.error('Errore nel recupero dei dettagli del form:', e);
-              }
               
               // Configura Marked.js per il rendering
               marked.setOptions({
@@ -412,21 +290,6 @@ export default async function handler(req, res) {
                 // Ottieni il testo modificato
                 const modifiedText = textarea.value;
                 
-                // Salva il messaggio nel localStorage come backup
-                try {
-                  localStorage.setItem('message_backup', modifiedText);
-                } catch (e) {
-                  console.error('Errore nel salvare il messaggio di backup:', e);
-                }
-                
-                // Prepara i formDetails per l'invio
-                let formDetailsParam = null;
-                if (formDetailsFromQuery) {
-                  console.log('FormDetails da includere nella richiesta POST:', formDetailsFromQuery);
-                  // Se è già una stringa JSON valida, usala direttamente
-                  formDetailsParam = formDetailsFromQuery;
-                }
-                
                 // Utilizza il metodo FETCH POST per inviare i dati al server
                 fetch(baseUrl + '/api/approve', {
                   method: 'POST',
@@ -438,7 +301,7 @@ export default async function handler(req, res) {
                     email: email,
                     modifiedMessage: modifiedText,
                     skipHubspot: false,
-                    formDetails: formDetailsParam
+                    formDetails: "${messageData.form_details}"
                   })
                 })
                 .then(response => {
@@ -467,10 +330,21 @@ export default async function handler(req, res) {
 
     // Se siamo qui, dobbiamo salvare su HubSpot
     console.log('Salvataggio su Hubspot in corso...');
-    console.log('formDetails tipo:', typeof formDetails);
-    console.log('formDetails valore:', formDetails);
     
-    await sendHubSpotEmail(email, messageToUse, formDetails);
+    // Prepara i formDetails per l'invio
+    let formDetailsToSend = messageData.form_details;
+    if (typeof formDetailsToSend === 'string') {
+      try {
+        formDetailsToSend = JSON.parse(formDetailsToSend);
+      } catch (error) {
+        console.error('Errore nel parsing dei formDetails:', error);
+        formDetailsToSend = {};
+      }
+    }
+    
+    console.log('FormDetails preparati per HubSpot:', formDetailsToSend);
+    
+    await sendHubSpotEmail(email, messageToUse, formDetailsToSend);
     
     // Invia messaggio di conferma a Slack
     await sendApprovalConfirmationToSlack(email);

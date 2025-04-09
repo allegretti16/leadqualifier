@@ -1,4 +1,5 @@
 const { OpenAI } = require('openai');
+import { saveMessage } from '../utils/supabase';
 
 // Funzione helper per ottenere l'URL base
 function getBaseUrl() {
@@ -81,14 +82,26 @@ async function sendMessageToSlack(formData, qualificationText) {
     
     console.log('Form Details creati:', formDetails);
     
-    // Codifica i dettagli del form come JSON e poi in URL-safe
-    const encodedFormDetails = encodeURIComponent(JSON.stringify(formDetails));
-
+    // Salva il messaggio in Supabase
+    try {
+      await saveMessage({
+        id: messageId,
+        email: formData.email,
+        message: qualificationText,
+        formDetails: JSON.stringify(formDetails),
+        originalMessage: formData.message
+      });
+      console.log('Messaggio salvato con successo in Supabase');
+    } catch (error) {
+      console.error('Errore nel salvataggio del messaggio in Supabase:', error);
+      throw error;
+    }
+    
     // Crea l'URL della pagina intermedia che salverà il messaggio in Supabase
-    const saveUrl = `${baseUrl}/api/save-message?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&formDetails=${encodedFormDetails}&originalMessage=${encodeURIComponent(formData.message)}`;
+    const saveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=true`;
     
     // Crea l'URL per inviare direttamente l'email e salvare su Hubspot
-    const sendEmailUrl = `${baseUrl}/api/send-direct-email?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&saveToHubspot=true&formDetails=${encodedFormDetails}`;
+    const sendEmailUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=false`;
     
     console.log('URL Invia e salva costruito:', sendEmailUrl);
 
