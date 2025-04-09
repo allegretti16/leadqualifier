@@ -1,13 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Mancano le variabili d\'ambiente per Supabase')
+if (!supabaseUrl || !supabaseAnonKey) {
+  throw new Error('Le variabili d\'ambiente Supabase non sono configurate correttamente')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
 // Funzioni per la gestione dei messaggi
 export const saveMessage = async (messageData) => {
