@@ -373,16 +373,76 @@ export default async function handler(req, res) {
       console.log('Token Slack:', process.env.SLACK_BOT_TOKEN ? 'Presente' : 'Mancante');
       console.log('Channel ID:', process.env.SLACK_CHANNEL_ID ? 'Presente' : 'Mancante');
       
-      const slackResponse = await fetch('https://slack.com/api/chat.postMessage', {
-        method: 'POST',
+      const blocks = [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Messaggio approvato*`
+          }
+        },
+        {
+          type: "section",
+          fields: [
+            {
+              type: "mrkdwn",
+              text: `*Nome:*\n${messageData.firstname} ${messageData.lastname}`
+            },
+            {
+              type: "mrkdwn",
+              text: `*Email:*\n${messageData.email}`
+            },
+            {
+              type: "mrkdwn",
+              text: `*Telefono:*\n${messageData.phone || 'Non specificato'}`
+            }
+          ]
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Messaggio:*\n${messageToUse}`
+          }
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "✏️ Modifica e Invia",
+                emoji: true,
+              },
+              style: "primary",
+              url: `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=true`,
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "📩 Invia e Salva su Hubspot",
+                emoji: true,
+              },
+              style: "danger",
+              url: `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=false`,
+            }
+          ]
+        }
+      ];
+
+      const slackResponse = await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
         },
         body: JSON.stringify({
           channel: process.env.SLACK_CHANNEL_ID,
-          text: `Messaggio approvato:\nNome: ${messageData.firstname}\nCognome: ${messageData.lastname}\nEmail: ${messageData.email}\nTelefono: ${messageData.phone}\nMessaggio: ${messageToUse}`
-        })
+          blocks: blocks,
+          unfurl_links: false
+        }),
       });
 
       const slackData = await slackResponse.json();

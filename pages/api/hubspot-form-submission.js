@@ -110,72 +110,90 @@ async function sendMessageToSlack(formData, qualificationText) {
     console.log('ID messaggio generato:', messageId);
     console.log('Lunghezza messaggio originale:', qualificationText.length);
 
-    // Blocchi per il messaggio Slack
-    const blocks = [
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: `*Nuovo lead da qualificare*\n\n*Dettagli:*\nNome: ${formData.firstname} ${formData.lastname}\nEmail: ${formData.email}\nAzienda: ${formData.company}\nTipo Progetto: ${formData.project_type}\nBudget: ${formData.budget}`,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Messaggio originale:*\n" + formData.message,
-        },
-      },
-      {
-        type: "section",
-        text: {
-          type: "mrkdwn",
-          text: "*Risposta Generata:*\n```" + qualificationText + "```",
-        },
-      },
-      {
-        type: "actions",
-        elements: [
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "✏️ Modifica e Invia",
-              emoji: true,
-            },
-            style: "primary",
-            url: saveUrl,
-          },
-          {
-            type: "button",
-            text: {
-              type: "plain_text",
-              text: "📩 Invia e Salva su Hubspot",
-              emoji: true,
-            },
-            style: "danger",
-            url: sendEmailUrl,
-          }
-        ],
-      }
-    ];
-
     // Invia notifica a Slack
     try {
       console.log('Tentativo di invio notifica Slack...');
       console.log('Token Slack:', process.env.SLACK_BOT_TOKEN ? 'Presente' : 'Mancante');
       console.log('Channel ID:', process.env.SLACK_CHANNEL_ID ? 'Presente' : 'Mancante');
       
-      const slackResponse = await fetch('https://slack.com/api/chat.postMessage', {
-        method: 'POST',
+      const blocks = [
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Nuovo form HubSpot ricevuto*`
+          }
+        },
+        {
+          type: "section",
+          fields: [
+            {
+              type: "mrkdwn",
+              text: `*Nome:*\n${formData.firstname} ${formData.lastname}`
+            },
+            {
+              type: "mrkdwn",
+              text: `*Email:*\n${formData.email}`
+            },
+            {
+              type: "mrkdwn",
+              text: `*Azienda:*\n${formData.company}`
+            },
+            {
+              type: "mrkdwn",
+              text: `*Tipo Progetto:*\n${formData.project_type}`
+            },
+            {
+              type: "mrkdwn",
+              text: `*Budget:*\n${formData.budget}`
+            }
+          ]
+        },
+        {
+          type: "section",
+          text: {
+            type: "mrkdwn",
+            text: `*Messaggio:*\n${formData.message}`
+          }
+        },
+        {
+          type: "actions",
+          elements: [
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "✏️ Modifica e Invia",
+                emoji: true,
+              },
+              style: "primary",
+              url: saveUrl,
+            },
+            {
+              type: "button",
+              text: {
+                type: "plain_text",
+                text: "📩 Invia e Salva su Hubspot",
+                emoji: true,
+              },
+              style: "danger",
+              url: sendEmailUrl,
+            }
+          ]
+        }
+      ];
+
+      const slackResponse = await fetch("https://slack.com/api/chat.postMessage", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
         },
         body: JSON.stringify({
           channel: process.env.SLACK_CHANNEL_ID,
-          text: `Nuovo form HubSpot ricevuto:\nNome: ${formData.firstname}\nCognome: ${formData.lastname}\nEmail: ${formData.email}\nTelefono: ${formData.phone}\nMessaggio: ${formData.message}`
-        })
+          blocks: blocks,
+          unfurl_links: false
+        }),
       });
 
       const slackData = await slackResponse.json();
