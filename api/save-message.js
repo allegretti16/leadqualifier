@@ -1,4 +1,4 @@
-import { saveMessage } from '../../utils/supabase'
+import { saveMessage } from '../utils/supabase'
 
 // Funzione helper per ottenere l'URL base
 function getBaseUrl() {
