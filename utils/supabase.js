@@ -57,4 +57,18 @@ export const updateMessage = async (messageId, updates) => {
 
   if (error) throw error
   return data[0]
+}
+
+export async function getMessages() {
+  const { data, error } = await supabase
+    .from('messages')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Errore nel recupero dei messaggi:', error);
+    throw error;
+  }
+
+  return data;
 } 
