@@ -1,6 +1,9 @@
 {
+  "/api/approve": "pages/api/approve.js",
   "/_app": "pages/_app.js",
   "/_error": "pages/_error.js",
+  "/messages": "pages/messages.html",
+  "/login": "pages/login.html",
   "/_document": "pages/_document.js",
-  "/login": "pages/login.js"
+  "/404": "pages/404.html"
 }
