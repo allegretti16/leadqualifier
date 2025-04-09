@@ -743,4 +743,28 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
       
       // Ora associamo la nota al contatto
       const noteId = noteData.id;
-      const associationUrl = `
+      const associationUrl = `https://api.hubapi.com/crm/v3/objects/notes/${noteId}/associations/contacts/${contactId}`;
+      
+      const associationResponse = await fetch(associationUrl, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!associationResponse.ok) {
+        const associationErrorText = await associationResponse.text();
+        console.error('Errore associazione nota:', associationErrorText);
+        throw new Error(`Errore HubSpot: ${associationResponse.status} ${associationResponse.statusText}`);
+      }
+      
+      console.log('Nota associata al contatto con successo');
+    }
+    
+    console.log('Email inviata e registrata in HubSpot con successo');
+  } catch (error) {
+    console.error('Errore nell\'invio dell\'email:', error);
+    throw error;
+  }
+}
