@@ -290,6 +290,14 @@ export default async function handler(req, res) {
                 // Ottieni il testo modificato
                 const modifiedText = textarea.value;
                 
+                // Prepara i formDetails
+                let formDetailsObj = {};
+                try {
+                  formDetailsObj = JSON.parse('${messageData.form_details}');
+                } catch (e) {
+                  console.error('Errore nel parsing dei formDetails:', e);
+                }
+                
                 // Utilizza il metodo FETCH POST per inviare i dati al server
                 fetch(baseUrl + '/api/approve', {
                   method: 'POST',
@@ -301,7 +309,7 @@ export default async function handler(req, res) {
                     email: email,
                     modifiedMessage: modifiedText,
                     skipHubspot: false,
-                    formDetails: "${messageData.form_details}"
+                    formDetails: formDetailsObj
                   })
                 })
                 .then(response => {
