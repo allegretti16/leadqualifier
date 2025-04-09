@@ -1,6 +1,5 @@
-
 import { sendGmailEmail } from './send-email';
-import { getMessage, updateMessage } from '../../utils/supabase';
+import { getMessage, updateMessage } from '../utils/supabase';
 
 // Funzione per inviare messaggio di conferma a Slack
 async function sendApprovalConfirmationToSlack(email) {
