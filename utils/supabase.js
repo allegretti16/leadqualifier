@@ -19,6 +19,8 @@ export const saveMessage = async (messageData) => {
         email: messageData.email,
         message_text: messageData.message,
         form_details: messageData.formDetails,
+        original_message: messageData.originalMessage,
+        status: 'pending',
         created_at: new Date().toISOString()
       }
     ])

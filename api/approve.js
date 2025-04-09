@@ -118,7 +118,13 @@ export default async function handler(req, res) {
         }
       } catch (error) {
         console.error('Errore nel recupero del messaggio da Supabase:', error);
+        return res.status(400).json({ error: 'Non è stato possibile recuperare il messaggio. Torna a Slack e riprova.' });
       }
+    }
+
+    // Se non abbiamo ancora un messaggio, restituisci errore
+    if (!messageToUse) {
+      return res.status(400).json({ error: 'Messaggio non trovato. Torna a Slack e riprova.' });
     }
 
     // Ottieni l'URL base corrente per i link
