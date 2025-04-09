@@ -108,27 +108,33 @@ export default async function handler(req, res) {
     // Recupera il messaggio da uno dei parametri disponibili
     let messageToUse = modifiedMessage || message;
     
-    // Se non abbiamo ancora un messaggio valido e c'è un ID, prova a recuperare dalla variabile globale
+    // Se non abbiamo ancora un messaggio valido e c'è un ID, prova a recuperare da Supabase
     if (!messageToUse && id) {
-      messageToUse = global[`message_${id}`];
-      console.log('Recupero messaggio da ID:', id);
-      console.log('Messaggio trovato nella variabile globale:', messageToUse ? 'Sì (lunghezza: ' + messageToUse.length + ')' : 'No');
+      try {
+        const messageData = await getMessage(id);
+        if (messageData) {
+          messageToUse = messageData.message_text;
+          console.log('Messaggio recuperato da Supabase:', messageToUse ? 'Sì (lunghezza: ' + messageToUse.length + ')' : 'No');
+        }
+      } catch (error) {
+        console.error('Errore nel recupero del messaggio da Supabase:', error);
+      }
     }
 
     // Ottieni l'URL base corrente per i link
     const baseUrl = getBaseUrl();
 
-    // Se non abbiamo un messaggio ma abbiamo un ID, mostriamo una pagina di recupero che utilizzerà localStorage
+    // Se non abbiamo un messaggio ma abbiamo un ID, mostriamo una pagina di recupero
     if (!messageToUse && id) {
-      console.log('Messaggio non trovato in memoria, tentativo di recupero da localStorage');
+      console.log('Messaggio non trovato in Supabase');
       
-      // Pagina di recupero dati da localStorage
+      // Pagina di errore
       res.setHeader('Content-Type', 'text/html');
       return res.status(200).send(`
         <!DOCTYPE html>
         <html>
           <head>
-            <title>Recupero Messaggio</title>
+            <title>Errore Recupero Messaggio</title>
             <meta charset="utf-8">
             <meta name="viewport" content="width=device-width, initial-scale=1">
             <style>
@@ -151,10 +157,10 @@ export default async function handler(req, res) {
                 width: 100%;
                 text-align: center;
               }
-              .icon {
+              .error-icon {
                 font-size: 64px;
                 margin-bottom: 20px;
-                color: #3498db;
+                color: #f44336;
               }
               h1 {
                 color: #2c3e50;
@@ -165,191 +171,30 @@ export default async function handler(req, res) {
                 line-height: 1.5;
                 margin-bottom: 20px;
               }
-              .form {
-                margin-top: 30px;
-              }
-              .textarea {
-                width: 100%;
-                height: 200px;
-                padding: 12px;
-                margin-bottom: 20px;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                font-family: inherit;
-                font-size: 14px;
-                box-sizing: border-box;
-              }
-              .spinner {
-                display: inline-block;
-                width: 30px;
-                height: 30px;
-                border: 4px solid rgba(0, 0, 0, 0.1);
-                border-radius: 50%;
-                border-top-color: #3498db;
-                animation: spin 1s ease-in-out infinite;
-                margin-right: 10px;
-                vertical-align: middle;
-              }
-              @keyframes spin {
-                to { transform: rotate(360deg); }
-              }
-              .hidden {
-                display: none;
-              }
               .button {
+                display: inline-block;
                 padding: 12px 24px;
                 background-color: #4CAF50;
                 color: white;
-                border: none;
+                text-decoration: none;
                 border-radius: 4px;
                 font-weight: 500;
+                transition: background-color 0.3s;
+                border: none;
                 cursor: pointer;
-                font-size: 16px;
               }
               .button:hover {
-                background-color: #45a049;
-              }
-              .message {
-                margin-top: 20px;
-                padding: 12px;
-                border-radius: 4px;
-              }
-              .success {
-                background-color: #d4edda;
-                color: #155724;
-              }
-              .error {
-                background-color: #f8d7da;
-                color: #721c24;
+                background-color: #43A047;
               }
             </style>
           </head>
           <body>
             <div class="container">
-              <div class="spinner"></div>
-              <h1>Recupero Messaggio</h1>
-              <p>Stiamo recuperando il messaggio dal localStorage...</p>
-              <div id="status"></div>
-              <div id="debug" style="margin-top: 20px; font-size: 12px; color: #777; text-align: left; display: none;"></div>
-              <button id="debugBtn" style="margin-top: 20px; padding: 5px 10px; font-size: 12px; background: #eee; border: 1px solid #ccc; cursor: pointer;">Mostra Debug</button>
+              <div class="error-icon">❌</div>
+              <h1>Errore nel Recupero del Messaggio</h1>
+              <p>Non è stato possibile recuperare il messaggio dal database. Torna a Slack e riprova.</p>
+              <a href="https://app.slack.com" class="button">Torna a Slack</a>
             </div>
-            
-            <script>
-              // Elementi UI
-              const statusEl = document.getElementById('status');
-              const debugEl = document.getElementById('debug');
-              const debugBtn = document.getElementById('debugBtn');
-              const spinner = document.querySelector('.spinner');
-              
-              // Parametri della pagina
-              const messageId = "${id}";
-              const email = "${email || 'no-reply@extendi.it'}";
-              const skipHubspot = ${skipHubspot === 'true'};
-              const baseUrl = "${baseUrl}";
-              
-              // Informazioni di debug
-              let debugInfo = [];
-              
-              // Funzione per aggiungere info di debug
-              function logDebug(msg) {
-                console.log(msg);
-                debugInfo.push(msg);
-                debugEl.innerHTML = debugInfo.map(item => '<div>' + item + '</div>').join('');
-              }
-              
-              // Funzione per aggiornare lo stato
-              function updateStatus(msg, isError = false) {
-                statusEl.innerHTML = msg;
-                statusEl.style.padding = '10px';
-                statusEl.style.marginTop = '20px';
-                statusEl.style.borderRadius = '4px';
-                
-                if (isError) {
-                  statusEl.style.backgroundColor = '#ffebee';
-                  statusEl.style.color = '#d32f2f';
-                  statusEl.style.border = '1px solid #ffcdd2';
-                  spinner.style.display = 'none';
-                } else {
-                  statusEl.style.backgroundColor = '#e8f5e9';
-                  statusEl.style.color = '#388e3c';
-                  statusEl.style.border = '1px solid #c8e6c9';
-                }
-              }
-              
-              // Mostra/nascondi debug
-              debugBtn.addEventListener('click', function() {
-                if (debugEl.style.display === 'none') {
-                  debugEl.style.display = 'block';
-                  this.textContent = 'Nascondi Debug';
-                } else {
-                  debugEl.style.display = 'none';
-                  this.textContent = 'Mostra Debug';
-                }
-              });
-              
-              // Funzione principale
-              async function init() {
-                try {
-                  // Logga tutte le chiavi in localStorage per debug
-                  const allKeys = Object.keys(localStorage);
-                  logDebug('Tutte le chiavi in localStorage: ' + allKeys.join(', '));
-                  
-                  // Recupero messaggio
-                  const messageKey = 'message_' + messageId;
-                  const savedMessage = localStorage.getItem(messageKey);
-                  
-                  logDebug('Chiave messaggio: ' + messageKey);
-                  logDebug('Messaggio trovato: ' + (savedMessage ? 'Sì' : 'No'));
-                  
-                  if (!savedMessage) {
-                    updateStatus('Non è stato possibile recuperare il messaggio. Torna a Slack e riprova.', true);
-                    return;
-                  }
-                  
-                  // Recupero email di backup
-                  const savedEmail = localStorage.getItem('email_' + messageId) || email;
-                  logDebug('Email: ' + savedEmail);
-                  
-                  // Recupero eventuali dettagli del form
-                  const formDetailsKey = 'formDetails_' + messageId;
-                  const formDetailsStr = localStorage.getItem(formDetailsKey);
-                  logDebug('Dettagli form trovati: ' + (formDetailsStr ? 'Sì' : 'No'));
-                  
-                  // Costruisci l'URL con il messaggio recuperato
-                  const params = new URLSearchParams({
-                    email: savedEmail,
-                    id: messageId,
-                    skipHubspot: skipHubspot
-                  });
-                  
-                  if (savedMessage) {
-                    params.append('message', savedMessage);
-                  }
-                  
-                  if (formDetailsStr) {
-                    params.append('formDetails', formDetailsStr);
-                  }
-                  
-                  const newUrl = '${baseUrl}/api/approve?' + params.toString();
-                  logDebug('Reindirizzamento a: ' + newUrl);
-                  
-                  // Aggiorna lo stato
-                  updateStatus('Messaggio recuperato, reindirizzamento in corso...');
-                  
-                  // Reindirizza
-                  setTimeout(() => {
-                    window.location.href = newUrl;
-                  }, 1000);
-                } catch (error) {
-                  console.error('Errore nel recupero:', error);
-                  logDebug('Errore: ' + error.message);
-                  updateStatus('Si è verificato un errore: ' + error.message, true);
-                }
-              }
-              
-              // Avvia l'inizializzazione
-              init();
-            </script>
           </body>
         </html>
       `);

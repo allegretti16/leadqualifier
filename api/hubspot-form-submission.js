@@ -84,8 +84,8 @@ async function sendMessageToSlack(formData, qualificationText) {
     // Codifica i dettagli del form come JSON e poi in URL-safe
     const encodedFormDetails = encodeURIComponent(JSON.stringify(formDetails));
 
-    // Crea l'URL della pagina intermedia che salverà il messaggio in localStorage
-    const saveUrl = `${baseUrl}/api/save-message?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&formDetails=${encodedFormDetails}`;
+    // Crea l'URL della pagina intermedia che salverà il messaggio in Supabase
+    const saveUrl = `${baseUrl}/api/save-message?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&formDetails=${encodedFormDetails}&originalMessage=${encodeURIComponent(formData.message)}`;
     
     // Crea l'URL per inviare direttamente l'email e salvare su Hubspot
     const sendEmailUrl = `${baseUrl}/api/send-direct-email?id=${messageId}&message=${encodeURIComponent(qualificationText)}&email=${encodeURIComponent(formData.email)}&saveToHubspot=true&formDetails=${encodedFormDetails}`;

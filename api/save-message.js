@@ -24,11 +24,17 @@ export default async function handler(req, res) {
 
   try {
     // Ottieni i parametri dalla query
-    const { id, message, email, formDetails } = req.query;
+    const { id, message, email, formDetails, originalMessage } = req.query;
     
-    console.log('Query params ricevuti:', { id, email, formDetailsLength: formDetails ? formDetails.length : 0 });
+    console.log('Query params ricevuti:', { 
+      id, 
+      email, 
+      formDetailsLength: formDetails ? formDetails.length : 0,
+      originalMessageLength: originalMessage ? originalMessage.length : 0
+    });
     console.log('FormDetails (primi 100 caratteri):', formDetails ? formDetails.substring(0, 100) + '...' : 'non presente');
     console.log('Message length:', message ? message.length : 0);
+    console.log('Original Message length:', originalMessage ? originalMessage.length : 0);
     if (formDetails) {
       console.log('FormDetails length:', formDetails.length);
     }
@@ -49,7 +55,8 @@ export default async function handler(req, res) {
         id,
         email,
         message,
-        formDetails
+        formDetails,
+        originalMessage
       });
       console.log('Messaggio salvato con successo in Supabase');
     } catch (error) {
