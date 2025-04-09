@@ -1,6 +1,6 @@
 const { OpenAI } = require('openai');
 import { sendGmailEmail } from './send-email';
-import { getMessage, updateMessage } from '../utils/supabase';
+import { getMessage, updateMessage } from '../../utils/supabase';
 
 // Funzione per inviare messaggio di conferma a Slack
 async function sendApprovalConfirmationToSlack(email) {
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
     // Recupera il messaggio da Supabase
     let messageData;
     try {
-      messageData = await getMessage(id);
+      messageData = await supabase.from('messages').select('*').eq('id', id).single();
       if (!messageData) {
         throw new Error('Messaggio non trovato');
       }
@@ -359,10 +359,10 @@ export default async function handler(req, res) {
     
     // Aggiorna lo stato del messaggio in Supabase
     try {
-      await updateMessage(id, {
+      await supabase.from('messages').update({
         status: 'approved',
         approved_at: new Date().toISOString()
-      });
+      }).eq('id', id);
     } catch (error) {
       console.error('Errore nell\'aggiornamento dello stato del messaggio:', error);
       // Non blocchiamo il flusso se l'aggiornamento fallisce

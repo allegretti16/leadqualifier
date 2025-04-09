@@ -1,4 +1,4 @@
-import { saveMessage } from '../utils/supabase'
+import { supabase } from '../../utils/supabase'
 
 // Funzione helper per ottenere l'URL base
 function getBaseUrl() {
@@ -51,13 +51,15 @@ export default async function handler(req, res) {
 
     // Salva il messaggio in Supabase
     try {
-      await saveMessage({
-        id,
-        email,
-        message,
-        formDetails,
-        originalMessage
-      });
+      await supabase.from('messages').insert([
+        {
+          id,
+          email,
+          message,
+          formDetails,
+          originalMessage
+        }
+      ]);
       console.log('Messaggio salvato con successo in Supabase');
     } catch (error) {
       console.error('Errore nel salvataggio del messaggio:', error);
