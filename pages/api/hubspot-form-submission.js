@@ -16,6 +16,8 @@ export default async function handler(req, res) {
   }
 
   try {
+    console.log('Richiesta ricevuta:', req.body);
+    
     const { email, message, formDetails, originalMessage } = req.body;
 
     if (!email || !message) {
@@ -25,14 +27,24 @@ export default async function handler(req, res) {
     // Genera un ID unico per il messaggio
     const messageId = Math.random().toString(36).substring(2, 15);
 
-    // Salva il messaggio in Supabase
-    const savedMessage = await saveMessage({
+    console.log('Dati da salvare:', {
       id: messageId,
       email,
       message,
       formDetails,
       originalMessage
     });
+
+    // Salva il messaggio in Supabase
+    const savedMessage = await saveMessage({
+      id: messageId,
+      email,
+      message,
+      formDetails: formDetails || null,
+      originalMessage: originalMessage || null
+    });
+
+    console.log('Messaggio salvato:', savedMessage);
 
     return res.status(200).json({
       success: true,
