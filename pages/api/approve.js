@@ -351,88 +351,21 @@ export default async function handler(req, res) {
     
     console.log('FormDetails preparati per HubSpot:', formDetailsToSend);
     
-    await sendHubSpotEmail(email, messageToUse, formDetailsToSend);
-    
-    // Invia messaggio di conferma a Slack
-    await sendApprovalConfirmationToSlack(email);
-    
-    // Aggiorna lo stato del messaggio in Supabase
     try {
+      // Prima aggiorniamo lo stato del messaggio
       await updateMessage(id, {
         status: 'approved',
         approved_at: new Date().toISOString()
       });
-    } catch (error) {
-      console.error('Errore nell\'aggiornamento dello stato del messaggio:', error);
-      // Non blocchiamo il flusso se l'aggiornamento fallisce
-    }
-    
-    // Invia notifica a Slack
-    try {
-      console.log('Tentativo di invio notifica Slack per approvazione...');
-      console.log('Token Slack:', process.env.SLACK_BOT_TOKEN ? 'Presente' : 'Mancante');
-      console.log('Channel ID:', process.env.SLACK_CHANNEL_ID ? 'Presente' : 'Mancante');
-      
-      const blocks = [
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Messaggio approvato*`
-          }
-        },
-        {
-          type: "section",
-          fields: [
-            {
-              type: "mrkdwn",
-              text: `*Nome:*\n${messageData.firstname} ${messageData.lastname}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Email:*\n${messageData.email}`
-            },
-            {
-              type: "mrkdwn",
-              text: `*Telefono:*\n${messageData.phone || 'Non specificato'}`
-            }
-          ]
-        },
-        {
-          type: "section",
-          text: {
-            type: "mrkdwn",
-            text: `*Messaggio:*\n${messageToUse}`
-          }
-        },
-        {
-          type: "actions",
-          elements: [
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "✏️ Modifica e Invia",
-                emoji: true,
-              },
-              style: "primary",
-              url: `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=true`,
-            },
-            {
-              type: "button",
-              text: {
-                type: "plain_text",
-                text: "📩 Invia e Salva su Hubspot",
-                emoji: true,
-              },
-              style: "danger",
-              url: `${baseUrl}/api/approve?id=${id}&email=${encodeURIComponent(email)}&skipHubspot=false`,
-            }
-          ]
-        }
-      ];
+      console.log('Stato del messaggio aggiornato con successo');
 
-      const slackResponse = await fetch("https://slack.com/api/chat.postMessage", {
+      // Poi inviamo l'email a HubSpot
+      await sendHubSpotEmail(email, messageToUse, formDetailsToSend);
+      console.log('Email inviata con successo a HubSpot');
+      
+      // Invia un singolo messaggio di conferma a Slack
+      const message = `✅ *SALVATA E INVIATA* - La risposta per ${email} è stata inviata e registrata in HubSpot`;
+      await fetch("https://slack.com/api/chat.postMessage", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -440,19 +373,18 @@ export default async function handler(req, res) {
         },
         body: JSON.stringify({
           channel: process.env.SLACK_CHANNEL_ID,
-          blocks: blocks,
+          text: message,
           unfurl_links: false
         }),
       });
-
-      const slackData = await slackResponse.json();
-      console.log('Risposta Slack:', slackData);
-      
-      if (!slackData.ok) {
-        console.error('Errore Slack:', slackData.error);
-      }
+      console.log('Conferma inviata a Slack');
     } catch (error) {
-      console.error('Errore nell\'invio a Slack:', error);
+      console.error('Errore durante il processo di approvazione:', error);
+      // Anche se c'è un errore, lo status è già stato aggiornato
+      return res.status(500).json({ 
+        error: error.message,
+        message: 'Errore durante il processo di approvazione, ma lo status è stato aggiornato'
+      });
     }
     
     // Restituisci una pagina HTML di conferma

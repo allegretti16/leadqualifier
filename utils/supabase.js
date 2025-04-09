@@ -52,7 +52,7 @@ export const updateMessage = async (messageId, updates) => {
   const { data, error } = await supabase
     .from('messages')
     .update(updates)
-    .eq('message_id', messageId)
+    .eq('id', messageId)
     .select()
 
   if (error) throw error
