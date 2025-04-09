@@ -354,7 +354,8 @@ export default async function handler(req, res) {
     try {
       // Prima aggiorniamo lo stato del messaggio
       await updateMessage(id, {
-        status: 'approved'
+        status: 'approved',
+        approved_at: Math.floor(Date.now() / 1000) // Convertiamo in secondi
       });
       console.log('Stato del messaggio aggiornato con successo');
 
