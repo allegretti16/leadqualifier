@@ -4,6 +4,8 @@
   "description": "Lead qualifier bot for HubSpot and Slack",
   "main": "api/hubspot-form-submission.js",
   "dependencies": {
+    "@hubspot/api-client": "^12.0.1",
+    "@slack/web-api": "^7.9.1",
     "@supabase/supabase-js": "^2.49.4",
     "googleapis": "^148.0.0",
     "next": "^15.2.5",
