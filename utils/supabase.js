@@ -31,13 +31,20 @@ export const saveMessage = async (messageData) => {
 }
 
 export const getMessage = async (messageId) => {
+  console.log('Tentativo di recupero messaggio con ID:', messageId);
+  
   const { data, error } = await supabase
     .from('messages')
     .select('*')
     .eq('message_id', messageId)
     .single()
 
-  if (error) throw error
+  if (error) {
+    console.error('Errore nel recupero del messaggio:', error);
+    throw error;
+  }
+  
+  console.log('Messaggio recuperato:', data ? 'Sì' : 'No');
   return data
 }
 

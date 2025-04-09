@@ -62,8 +62,15 @@ export default async function handler(req, res) {
   try {
     const { id, email, skipHubspot, formDetails } = req.query;
     
+    console.log('Parametri ricevuti:');
+    console.log('- ID:', id);
+    console.log('- Email:', email);
+    console.log('- Skip HubSpot:', skipHubspot);
+    console.log('- Form Details presente:', !!formDetails);
+    
     // Verifica che l'ID sia presente
     if (!id) {
+      console.error('ID messaggio mancante');
       return res.status(400).json({ error: 'ID messaggio mancante' });
     }
 
@@ -115,6 +122,9 @@ export default async function handler(req, res) {
         if (messageData) {
           messageToUse = messageData.message_text;
           console.log('Messaggio recuperato da Supabase:', messageToUse ? 'Sì (lunghezza: ' + messageToUse.length + ')' : 'No');
+        } else {
+          console.error('Messaggio non trovato in Supabase con ID:', id);
+          return res.status(400).json({ error: 'Messaggio non trovato nel database. Torna a Slack e riprova.' });
         }
       } catch (error) {
         console.error('Errore nel recupero del messaggio da Supabase:', error);
@@ -124,6 +134,7 @@ export default async function handler(req, res) {
 
     // Se non abbiamo ancora un messaggio, restituisci errore
     if (!messageToUse) {
+      console.error('Nessun messaggio disponibile dopo tutti i tentativi di recupero');
       return res.status(400).json({ error: 'Messaggio non trovato. Torna a Slack e riprova.' });
     }
 
