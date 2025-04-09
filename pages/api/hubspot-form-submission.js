@@ -1,5 +1,5 @@
 const { OpenAI } = require('openai');
-import { saveMessage } from '../utils/supabase';
+import { saveMessage } from '../../utils/supabase';
 
 // Funzione helper per ottenere l'URL base
 function getBaseUrl() {
@@ -160,20 +160,32 @@ async function sendMessageToSlack(formData, qualificationText) {
       }
     ];
 
-    const result = await fetch("https://slack.com/api/chat.postMessage", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.SLACK_BOT_TOKEN}`,
-      },
-      body: JSON.stringify({
-        channel: process.env.SLACK_CHANNEL_ID,
-        blocks: blocks,
-      }),
-    });
+    // Invia notifica a Slack
+    try {
+      console.log('Tentativo di invio notifica Slack...');
+      console.log('Token Slack:', process.env.SLACK_BOT_TOKEN ? 'Presente' : 'Mancante');
+      console.log('Channel ID:', process.env.SLACK_CHANNEL_ID ? 'Presente' : 'Mancante');
+      
+      const slackResponse = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`
+        },
+        body: JSON.stringify({
+          channel: process.env.SLACK_CHANNEL_ID,
+          text: `Nuovo form HubSpot ricevuto:\nNome: ${formData.firstname}\nCognome: ${formData.lastname}\nEmail: ${formData.email}\nTelefono: ${formData.phone}\nMessaggio: ${formData.message}`
+        })
+      });
 
-    if (!result.ok) {
-      throw new Error(`Errore Slack: ${result.statusText}`);
+      const slackData = await slackResponse.json();
+      console.log('Risposta Slack:', slackData);
+      
+      if (!slackData.ok) {
+        console.error('Errore Slack:', slackData.error);
+      }
+    } catch (error) {
+      console.error('Errore nell\'invio a Slack:', error);
     }
 
     return result.json();

@@ -1,4 +1,4 @@
-import { supabase } from '../utils/supabase'
+import { supabase } from '../../utils/supabase'
 
 // Funzione helper per ottenere l'URL base
 function getBaseUrl() {

@@ -1,5 +1,5 @@
 import { sendGmailEmail } from './send-email';
-import { getMessage, updateMessage } from '../utils/supabase';
+import { getMessage, updateMessage } from '../../utils/supabase';
 
 // Funzione per inviare messaggio di conferma a Slack
 async function sendApprovalConfirmationToSlack(email) {
@@ -367,6 +367,34 @@ export default async function handler(req, res) {
       // Non blocchiamo il flusso se l'aggiornamento fallisce
     }
     
+    // Invia notifica a Slack
+    try {
+      console.log('Tentativo di invio notifica Slack per approvazione...');
+      console.log('Token Slack:', process.env.SLACK_BOT_TOKEN ? 'Presente' : 'Mancante');
+      console.log('Channel ID:', process.env.SLACK_CHANNEL_ID ? 'Presente' : 'Mancante');
+      
+      const slackResponse = await fetch('https://slack.com/api/chat.postMessage', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${process.env.SLACK_BOT_TOKEN}`
+        },
+        body: JSON.stringify({
+          channel: process.env.SLACK_CHANNEL_ID,
+          text: `Messaggio approvato:\nNome: ${messageData.firstname}\nCognome: ${messageData.lastname}\nEmail: ${messageData.email}\nTelefono: ${messageData.phone}\nMessaggio: ${messageToUse}`
+        })
+      });
+
+      const slackData = await slackResponse.json();
+      console.log('Risposta Slack:', slackData);
+      
+      if (!slackData.ok) {
+        console.error('Errore Slack:', slackData.error);
+      }
+    } catch (error) {
+      console.error('Errore nell\'invio a Slack:', error);
+    }
+    
     // Restituisci una pagina HTML di conferma
     res.setHeader('Content-Type', 'text/html');
     res.status(200).send(`
@@ -715,47 +743,4 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
       
       // Ora associamo la nota al contatto
       const noteId = noteData.id;
-      const associationUrl = `https://api.hubapi.com/crm/v4/objects/notes/${noteId}/associations/contacts/${contactId}/note_to_contact`;
-      
-      const associationResponse = await fetch(associationUrl, {
-        method: 'PUT',
-        headers: {
-          'Authorization': `Bearer ${process.env.HUBSPOT_API_KEY}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      if (!associationResponse.ok) {
-        console.error('Errore nell\'associazione della nota');
-      } else {
-        console.log('Nota associata al contatto con successo');
-      }
-      
-      return;
-    }
-    
-    const engagementResult = await engagementResponse.json();
-    console.log('Engagement creato:', engagementResult.id);
-    
-    return engagementResult;
-  } catch (error) {
-    console.error('Errore nell\'invio a HubSpot:', error);
-    throw error;
-  }
-}
-
-// Funzione comune per l'approvazione
-function approveWithParams(email, message) {
-  if (!email) {
-    email = "no-reply@extendi.it"; // Usiamo un'email predefinita se non fornita
-  }
-  
-  // Utilizziamo la stessa origine per l'URL di approvazione
-  const baseUrl = window.location.origin;
-  console.log('Base URL:', baseUrl);
-  
-  const approveUrl = baseUrl + '/api/approve?email=' + encodeURIComponent(email) + '&message=' + encodeURIComponent(message);
-  console.log('Approve URL:', approveUrl);
-  
-  window.location.href = approveUrl;
-} 
+      const associationUrl = `
