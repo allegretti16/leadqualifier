@@ -60,13 +60,26 @@ export default async function handler(req, res) {
   }
 
   try {
-    const { id, email, skipHubspot, formDetails } = req.query;
+    // Estrai i parametri dalla richiesta (supporta sia GET che POST)
+    let params;
+    if (req.method === 'POST') {
+      params = req.body || {};
+      console.log('POST body ricevuto:', JSON.stringify(req.body));
+    } else {
+      params = req.query || {};
+      console.log('GET params ricevuti:', JSON.stringify(req.query));
+    }
+    
+    // Ottieni i parametri dalla richiesta
+    const { id, email, skipHubspot, formDetails, modifiedMessage, message } = params;
     
     console.log('Parametri ricevuti:');
     console.log('- ID:', id);
     console.log('- Email:', email);
     console.log('- Skip HubSpot:', skipHubspot);
     console.log('- Form Details presente:', !!formDetails);
+    console.log('- Modified Message presente:', !!modifiedMessage);
+    console.log('- Message presente:', !!message);
     
     // Verifica che l'ID sia presente
     if (!id) {
@@ -91,27 +104,6 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Email non corrispondente' });
     }
 
-    // Estrai i parametri dalla richiesta (supporta sia GET che POST)
-    let params;
-    if (req.method === 'POST') {
-      params = req.body || {};
-      console.log('POST body ricevuto:', JSON.stringify(req.body));
-    } else {
-      params = req.query || {};
-      console.log('GET params ricevuti:', JSON.stringify(req.query));
-    }
-    
-    // Ottieni i parametri dalla richiesta
-    const { modifiedMessage, message } = params;
-    
-    console.log('Parametri ricevuti:');
-    console.log('- Email:', email);
-    console.log('- ID:', id);
-    console.log('- Skip HubSpot:', skipHubspot);
-    console.log('- Form Details:', formDetails ? 'presente' : 'non presente');
-    console.log('- Message:', message ? 'presente' : 'non presente');
-    console.log('- Modified Message:', modifiedMessage ? 'presente' : 'non presente');
-    
     // Recupera il messaggio da uno dei parametri disponibili
     let messageToUse = modifiedMessage || message;
     
@@ -442,6 +434,7 @@ export default async function handler(req, res) {
                     'Content-Type': 'application/json',
                   },
                   body: JSON.stringify({
+                    id: "${id}",
                     email: email,
                     modifiedMessage: modifiedText,
                     skipHubspot: false,
