@@ -168,6 +168,15 @@ export default function Messages() {
                   </p>
                 </div>
                 <div className="info-section">
+                  <p className="label">Progetto</p>
+                  <p className="value">
+                    {message.form_details ? 
+                      `${JSON.parse(message.form_details).project || ''}`.trim() || 'Non specificato'
+                      : 'Non specificato'
+                    }
+                  </p>
+                </div>
+                <div className="info-section">
                   <p className="label">Budget</p>
                   <p className="value">
                     {message.form_details ? 
