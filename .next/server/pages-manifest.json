@@ -1,16 +1,7 @@
 {
-  "/api/auth": "pages/api/auth.js",
-  "/_error": "pages/_error.js",
   "/_app": "pages/_app.js",
-  "/api/approve": "pages/api/approve.js",
-  "/api/hubspot-form-submission": "pages/api/hubspot-form-submission.js",
-  "/api/save-message": "pages/api/save-message.js",
-  "/login": "pages/login.html",
-  "/api/test-security": "pages/api/test-security.js",
-  "/api/send-direct-email": "pages/api/send-direct-email.js",
-  "/api/send-email": "pages/api/send-email.js",
-  "/api/test-supabase": "pages/api/test-supabase.js",
-  "/messages": "pages/messages.html",
+  "/_error": "pages/_error.js",
   "/_document": "pages/_document.js",
-  "/404": "pages/404.html"
+  "/messages": "pages/messages.js",
+  "/login": "pages/login.js"
 }
