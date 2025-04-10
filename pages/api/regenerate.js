@@ -1,6 +1,7 @@
 import { OpenAI } from 'openai';
 import { updateMessage, getMessage } from '../../utils/supabase';
 import { authMiddleware } from '../../middleware/authMiddleware';
+import { supabaseAdmin } from '../../utils/supabase';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -18,23 +19,36 @@ async function handler(req, res) {
   }
 
   try {
-    // Recupera il messaggio originale
-    const message = await getMessage(id);
-    if (!message) {
+    // Recupera il messaggio direttamente usando supabaseAdmin invece di getMessage
+    // per evitare il problema con .single()
+    const { data: message, error: fetchError } = await supabaseAdmin
+      .from('messages')
+      .select('*')
+      .eq('id', id)
+      .limit(1);
+    
+    if (fetchError) {
+      console.error('Errore nel recupero del messaggio:', fetchError);
+      return res.status(500).json({ error: fetchError.message });
+    }
+    
+    if (!message || message.length === 0) {
       return res.status(404).json({ error: 'Messaggio non trovato' });
     }
 
+    const messageData = message[0];
+
     // Estrai i dettagli del form e il messaggio originale
     let formDetails = {};
-    if (message.form_details) {
+    if (messageData.form_details) {
       try {
-        formDetails = JSON.parse(message.form_details);
+        formDetails = JSON.parse(messageData.form_details);
       } catch (error) {
         console.error('Errore nel parsing dei dettagli del form:', error);
       }
     }
 
-    const originalMessage = message.original_message || '';
+    const originalMessage = messageData.original_message || '';
     
     // Crea il prompt per OpenAI
     const prompt = `
@@ -75,10 +89,18 @@ Non includere mai pseudofirme come ---.
     const generatedResponse = completion.choices[0].message.content.trim();
 
     // Aggiorna il messaggio con la nuova risposta
-    await updateMessage(id, {
-      message_text: generatedResponse,
-      regenerated_at: new Date().toISOString()
-    });
+    const { error: updateError } = await supabaseAdmin
+      .from('messages')
+      .update({
+        message_text: generatedResponse,
+        regenerated_at: new Date().toISOString()
+      })
+      .eq('id', id);
+    
+    if (updateError) {
+      console.error('Errore nell\'aggiornamento del messaggio:', updateError);
+      return res.status(500).json({ error: updateError.message });
+    }
 
     return res.status(200).json({ 
       success: true, 

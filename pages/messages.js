@@ -108,7 +108,8 @@ export default function Messages() {
       });
 
       if (!response.ok) {
-        throw new Error('Errore nella rigenerazione della risposta');
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Errore nella rigenerazione della risposta');
       }
 
       const data = await response.json();
@@ -121,7 +122,7 @@ export default function Messages() {
       ));
     } catch (err) {
       console.error('Errore:', err);
-      alert('Errore nella rigenerazione della risposta');
+      alert('Errore nella rigenerazione della risposta: ' + err.message);
     } finally {
       setRegenerating(null);
     }
@@ -209,11 +210,11 @@ export default function Messages() {
                   Rifiuta
                 </button>
                 <button
-                  onClick={() => handleRegenerate(message.id)}
+                  onClick={() => handleRegenerate(message.message_id)}
                   className="button regenerate"
-                  disabled={regenerating === message.id}
+                  disabled={regenerating === message.message_id}
                 >
-                  {regenerating === message.id ? 'Rigenerando...' : 'Rigenera Risposta'}
+                  {regenerating === message.message_id ? 'Rigenerando...' : 'Rigenera Risposta'}
                 </button>
               </div>
             </div>
