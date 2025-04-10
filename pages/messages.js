@@ -171,7 +171,7 @@ export default function Messages() {
                   <p className="label">Progetto</p>
                   <p className="value">
                     {message.form_details ? 
-                      `${JSON.parse(message.form_details).project || ''}`.trim() || 'Non specificato'
+                      `${JSON.parse(message.form_details).project_type || ''}`.trim() || 'Non specificato'
                       : 'Non specificato'
                     }
                   </p>
@@ -185,11 +185,11 @@ export default function Messages() {
                     }
                   </p>
                 </div>
-                <div className="info-section">
+                <div className="info-section message-box">
                   <p className="label">Messaggio Originale</p>
                   <div className="message-text">{message.original_message}</div>
                 </div>
-                <div className="info-section message-text-wide">
+                <div className="info-section message-box">
                   <p className="label">Risposta Generata</p>
                   <div className="message-text">{message.message_text}</div>
                 </div>
@@ -277,7 +277,7 @@ export default function Messages() {
             padding: 1.5rem;
             transition: transform 0.2s ease, box-shadow 0.2s ease;
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             gap: 1.5rem;
           }
           .message-card:hover {
@@ -320,11 +320,14 @@ export default function Messages() {
           .message-content {
             grid-column: 1 / -1;
             display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
             gap: 1.5rem;
           }
           .info-section {
             margin-bottom: 1rem;
+          }
+          .message-box {
+            grid-column: span 2;
           }
           .label {
             color: #6b7280;
@@ -404,6 +407,12 @@ export default function Messages() {
             .message-card {
               grid-template-columns: 1fr 1fr;
             }
+            .message-content {
+              grid-template-columns: 1fr 1fr;
+            }
+            .message-box {
+              grid-column: span 1;
+            }
           }
           @media (max-width: 768px) {
             .container {
@@ -414,6 +423,9 @@ export default function Messages() {
             }
             .message-content {
               grid-template-columns: 1fr;
+            }
+            .message-box {
+              grid-column: span 1;
             }
             .message-actions {
               flex-direction: column;
