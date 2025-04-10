@@ -9,30 +9,36 @@ export default function Messages() {
   const router = useRouter();
 
   useEffect(() => {
-    // Controllo autenticazione
-    const isAuthenticated = localStorage.getItem('isAuthenticated');
-    if (!isAuthenticated) {
-      router.push('/login');
-      return;
-    }
-
-    async function fetchMessages() {
+    async function fetchData() {
       try {
-        const response = await fetch('/api/get-messages');
+        // Prima verifica l'autenticazione
+        const authResponse = await fetch('/api/check-auth', {
+          credentials: 'include' // Importante per inviare i cookie
+        });
         
-        if (!response.ok) {
-          // Se la risposta è 401, significa che l'utente non è autenticato
-          if (response.status === 401) {
-            localStorage.removeItem('isAuthenticated');
+        if (!authResponse.ok) {
+          console.error('Utente non autenticato:', await authResponse.text());
+          router.push('/login');
+          return;
+        }
+        
+        // Poi carica i messaggi
+        const messagesResponse = await fetch('/api/get-messages', {
+          credentials: 'include' // Importante per inviare i cookie
+        });
+        
+        if (!messagesResponse.ok) {
+          if (messagesResponse.status === 401 || messagesResponse.status === 403) {
+            console.error('Accesso non autorizzato');
             router.push('/login');
             return;
           }
           
-          const errorData = await response.json();
+          const errorData = await messagesResponse.json();
           throw new Error(errorData.error || 'Errore nel recupero dei messaggi');
         }
         
-        const data = await response.json();
+        const data = await messagesResponse.json();
         setMessages(data);
       } catch (err) {
         console.error('Errore:', err);
@@ -42,12 +48,23 @@ export default function Messages() {
       }
     }
 
-    fetchMessages();
+    fetchData();
   }, [router]);
 
-  const handleLogout = () => {
-    localStorage.removeItem('isAuthenticated');
-    router.push('/login');
+  const handleLogout = async () => {
+    try {
+      // Chiama un endpoint per cancellare i cookie
+      await fetch('/api/logout', {
+        method: 'POST',
+        credentials: 'include'
+      });
+      
+      router.push('/login');
+    } catch (err) {
+      console.error('Errore durante il logout:', err);
+      // Forzare comunque il redirect al login
+      router.push('/login');
+    }
   };
 
   if (loading) return <div className="loading">Caricamento...</div>;

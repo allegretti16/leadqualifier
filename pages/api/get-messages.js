@@ -1,12 +1,10 @@
 import { supabaseAdmin } from '../../utils/supabase';
+import { authMiddleware } from '../../middleware/authMiddleware';
 
-export default async function handler(req, res) {
-  // Verifica se l'utente è autenticato (controlla il cookie auth)
-  if (!req.cookies.auth && !req.cookies.isAuthenticated) {
-    return res.status(401).json({ error: 'Non autorizzato' });
-  }
-
+// Endpoint protetto con il middleware di autenticazione
+async function handler(req, res) {
   try {
+    // Ottieni i messaggi da Supabase usando la chiave di servizio
     const { data, error } = await supabaseAdmin
       .from('messages')
       .select('*')
@@ -22,4 +20,7 @@ export default async function handler(req, res) {
     console.error('Errore nel recupero dei messaggi:', err);
     return res.status(500).json({ error: 'Errore del server' });
   }
-} 
+}
+
+// Applica il middleware di autenticazione
+export default authMiddleware(handler); 

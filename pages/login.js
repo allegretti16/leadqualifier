@@ -9,10 +9,21 @@ export default function Login() {
 
   // Verifica se l'utente è già autenticato
   useEffect(() => {
-    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
-    if (isAuthenticated) {
-      router.push('/messages');
+    async function checkAuth() {
+      try {
+        // Verifica lo stato di autenticazione facendo una richiesta all'API
+        const response = await fetch('/api/check-auth');
+        if (response.ok) {
+          // Se la risposta è OK, l'utente è autenticato
+          router.push('/messages');
+        }
+      } catch (err) {
+        // In caso di errore, non fare nulla e mostra il form di login
+        console.error('Errore nel controllo dell\'autenticazione:', err);
+      }
     }
+    
+    checkAuth();
   }, [router]);
 
   const handleSubmit = async (e) => {
@@ -27,19 +38,16 @@ export default function Login() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ password }),
+        // Importante per consentire l'invio/ricezione di cookie
+        credentials: 'include'
       });
 
       const data = await response.json();
 
       if (response.ok) {
-        // Imposta manualmente isAuthenticated in localStorage
-        localStorage.setItem('isAuthenticated', 'true');
         console.log('Autenticazione riuscita, reindirizzamento a /messages');
-        
-        // Prova con un timeout per dare tempo ai cookie di essere impostati
-        setTimeout(() => {
-          router.push('/messages');
-        }, 500);
+        // Non abbiamo più bisogno di localStorage perché ora usiamo solo cookie
+        router.push('/messages');
       } else {
         setError(data.error || 'Errore durante l\'autenticazione');
       }
