@@ -668,8 +668,8 @@ export async function sendHubSpotEmail(email, message, formDetailsString) {
     
     console.log('Contatto trovato:', contactId);
     
-    // Aggiorniamo l'associazione con l'ID del contatto
-    engagementPayload.associations.contactIds = [parseInt(contactId)];
+    // Aggiorniamo l'associazione con l'ID del contatto come stringa
+    engagementPayload.associations.contactIds = [contactId];
     
     // Inviamo l'engagement
     const engagementResponse = await fetch(engagementUrl, {
