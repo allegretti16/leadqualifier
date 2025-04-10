@@ -33,7 +33,14 @@ async function sendApprovalConfirmationToSlack(email) {
 }
 
 // Funzione helper per ottenere l'URL base
-function getBaseUrl() {
+function getBaseUrl(req) {
+  // Verifica prima se c'è un header di origine
+  const origin = req.headers.origin || '';
+  if (origin && origin.includes('leadqualifier')) {
+    return origin;
+  }
+  
+  // Altrimenti usa la logica standard
   if (process.env.NODE_ENV === 'development') {
     return 'http://localhost:3000';
   } else {
@@ -45,16 +52,21 @@ function getBaseUrl() {
 async function baseHandler(req, res) {
   // Gestisci preflight CORS
   if (req.method === 'OPTIONS') {
-    res.setHeader('Access-Control-Allow-Origin', '*');
+    // Permetti l'origine della richiesta
+    const origin = req.headers.origin || '*';
+    res.setHeader('Access-Control-Allow-Origin', origin);
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
     return res.status(200).end();
   }
 
   // Imposta gli header CORS per tutte le altre richieste
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin || '*';
+  res.setHeader('Access-Control-Allow-Origin', origin);
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+  res.setHeader('Access-Control-Allow-Credentials', 'true');
 
   try {
     // Estrai i parametri dalla richiesta (supporta sia GET che POST)
@@ -95,6 +107,9 @@ async function baseHandler(req, res) {
 
     // Se skipHubspot è presente e non false, mostra la pagina di modifica
     if (skipHubspot !== 'false' && skipHubspot !== false) {
+      // Ottieni l'URL base esatto dalla richiesta attuale
+      const currentBaseUrl = getBaseUrl(req);
+      
       res.setHeader('Content-Type', 'text/html');
       return res.send(`
         <!DOCTYPE html>
@@ -179,12 +194,14 @@ async function baseHandler(req, res) {
             </div>
             
             <script>
-              const baseUrl = "${getBaseUrl()}";
+              // Usiamo lo stesso URL della richiesta corrente
+              const baseUrl = window.location.origin;
+              const apiPath = window.location.pathname;
               
               function saveToHubspot() {
                 const modifiedText = document.getElementById('messageText').value;
                 
-                fetch(baseUrl + '/api/approve', {
+                fetch(baseUrl + apiPath, {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
