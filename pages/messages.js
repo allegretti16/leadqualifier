@@ -64,7 +64,7 @@ export default function Messages() {
             </div>
             <div className="message-actions">
               <a 
-                href={`/api/approve?id=${message.id}&email=${encodeURIComponent(message.email)}&skipHubspot=true`}
+                href={`/api/approve?id=${message.message_id}&email=${encodeURIComponent(message.email)}&skipHubspot=true`}
                 className="button edit"
                 target="_blank"
                 rel="noopener noreferrer"
@@ -72,7 +72,7 @@ export default function Messages() {
                 Modifica e Invia
               </a>
               <a 
-                href={`/api/approve?id=${message.id}&email=${encodeURIComponent(message.email)}`}
+                href={`/api/approve?id=${message.message_id}&email=${encodeURIComponent(message.email)}`}
                 className="button send"
                 target="_blank"
                 rel="noopener noreferrer"
