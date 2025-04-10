@@ -29,7 +29,6 @@ async function sendApprovalConfirmationToSlack(email) {
     return result.json();
   } catch (error) {
     console.error('Errore nell\'invio della conferma a Slack:', error);
-    // Non far fallire tutta l'approvazione se non riusciamo a inviare la conferma
   }
 }
 
@@ -42,38 +41,232 @@ function getBaseUrl() {
   }
 }
 
-// Endpoint protetto con il middleware di autenticazione
+// Handler principale
 async function handler(req, res) {
-  const { id, email, skipHubspot } = req.query;
-
-  if (!id || !email) {
-    return res.status(400).json({ error: 'ID e email sono richiesti' });
-  }
-
   try {
-    // Resto della tua logica per approvare i messaggi
-    // ...
-
-    // Esempio:
-    // 1. Aggiorna lo stato del messaggio a 'approved'
-    const { data, error } = await supabaseAdmin
-      .from('messages')
-      .update({ status: 'approved' })
-      .eq('message_id', id)
-      .select();
-
-    if (error) {
-      console.error('Errore nell\'aggiornamento del messaggio:', error);
-      return res.status(500).json({ error: error.message });
+    // Estrai i parametri dalla richiesta (supporta sia GET che POST)
+    let params;
+    if (req.method === 'POST') {
+      params = req.body || {};
+    } else {
+      params = req.query || {};
+    }
+    
+    // Ottieni i parametri dalla richiesta
+    const { id, email, skipHubspot, modifiedMessage } = params;
+    
+    // Verifica che l'ID sia presente
+    if (!id) {
+      return res.status(400).json({ error: 'ID messaggio mancante' });
     }
 
-    // 2. Se skipHubspot non è true, invia i dati a HubSpot
-    // ...
+    // Recupera il messaggio da Supabase
+    let messageData;
+    try {
+      messageData = await getMessage(id);
+      if (!messageData) {
+        throw new Error('Messaggio non trovato');
+      }
+    } catch (error) {
+      console.error('Errore nel recupero del messaggio:', error);
+      return res.status(500).json({ error: 'Errore nel recupero del messaggio' });
+    }
 
-    return res.status(200).json({ success: true, data });
-  } catch (err) {
-    console.error('Errore nell\'approvazione del messaggio:', err);
-    return res.status(500).json({ error: 'Errore del server' });
+    // Verifica che l'email corrisponda
+    if (messageData.email !== email) {
+      return res.status(400).json({ error: 'Email non corrispondente' });
+    }
+
+    // Usa il messaggio modificato se presente, altrimenti quello salvato
+    const messageToUse = modifiedMessage || messageData.message_text;
+
+    // Se skipHubspot è presente e non false, mostra la pagina di modifica
+    if (skipHubspot !== 'false' && skipHubspot !== false) {
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Modifica Messaggio</title>
+            <meta charset="utf-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background-color: #f9fafb;
+              }
+              .container {
+                background-color: white;
+                padding: 40px;
+                border-radius: 12px;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+                max-width: 800px;
+                margin: 0 auto;
+              }
+              h1 {
+                color: #2c3e50;
+                margin-bottom: 20px;
+                font-weight: 600;
+                text-align: center;
+              }
+              .email-info {
+                background-color: #e3f2fd;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 20px 0;
+                border-left: 4px solid #2196f3;
+              }
+              textarea {
+                width: 100%;
+                height: 300px;
+                padding: 12px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+                font-family: inherit;
+                font-size: 14px;
+                line-height: 1.6;
+              }
+              .button-group {
+                display: flex;
+                justify-content: center;
+                gap: 15px;
+                margin-top: 30px;
+              }
+              .button {
+                padding: 12px 24px;
+                background-color: #4CAF50;
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+                font-weight: 500;
+                border: none;
+                cursor: pointer;
+              }
+              .button-secondary {
+                background-color: #607D8B;
+              }
+              .button:hover {
+                opacity: 0.9;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <h1>Modifica il messaggio prima di salvarlo</h1>
+              <div class="email-info">
+                <p><strong>Email destinatario:</strong> ${email}</p>
+              </div>
+              <textarea id="messageText">${messageToUse}</textarea>
+              <div class="button-group">
+                <button onclick="saveToHubspot()" class="button">Salva su HubSpot e invia email</button>
+                <button onclick="window.close()" class="button button-secondary">Annulla</button>
+              </div>
+            </div>
+            
+            <script>
+              const baseUrl = "${getBaseUrl()}";
+              
+              function saveToHubspot() {
+                const modifiedText = document.getElementById('messageText').value;
+                
+                fetch(baseUrl + '/api/approve', {
+                  method: 'POST',
+                  headers: {
+                    'Content-Type': 'application/json',
+                    'Accept': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    id: "${id}",
+                    email: "${email}",
+                    modifiedMessage: modifiedText,
+                    skipHubspot: false
+                  })
+                })
+                .then(response => {
+                  if (!response.ok) {
+                    throw new Error('Errore nella richiesta');
+                  }
+                  return response.text();
+                })
+                .then(html => {
+                  document.open();
+                  document.write(html);
+                  document.close();
+                })
+                .catch(error => {
+                  alert('Errore durante il salvataggio: ' + error.message);
+                });
+              }
+            </script>
+          </body>
+        </html>
+      `);
+    }
+
+    // Se siamo qui, dobbiamo salvare su HubSpot
+    try {
+      // Prima aggiorniamo lo stato del messaggio
+      await updateMessage(id, {
+        status: 'approved',
+        approved_at: new Date().toISOString()
+      });
+
+      // Poi inviamo l'email
+      await sendGmailEmail(email, "Grazie per averci contattato", messageToUse);
+      
+      // Invia conferma a Slack
+      await sendApprovalConfirmationToSlack(email);
+
+      // Restituisci la pagina di conferma
+      res.setHeader('Content-Type', 'text/html');
+      return res.send(`
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Email Inviata</title>
+            <style>
+              body {
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: #f0f2f5;
+              }
+              .container {
+                text-align: center;
+                padding: 2rem;
+                background: white;
+                border-radius: 8px;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+              }
+              .success-icon {
+                font-size: 48px;
+                color: #4CAF50;
+                margin-bottom: 1rem;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="container">
+              <div class="success-icon">✅</div>
+              <h1>Email Inviata con Successo</h1>
+              <p>L'email è stata inviata a: ${email}</p>
+              <button onclick="window.close()">Chiudi</button>
+            </div>
+          </body>
+        </html>
+      `);
+    } catch (error) {
+      console.error('Errore durante il processo di approvazione:', error);
+      return res.status(500).json({ error: error.message });
+    }
+  } catch (error) {
+    console.error('Errore nella gestione della richiesta:', error);
+    return res.status(500).json({ error: error.message });
   }
 }
 
