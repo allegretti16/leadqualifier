@@ -43,6 +43,19 @@ function getBaseUrl() {
 
 // Handler principale
 async function baseHandler(req, res) {
+  // Gestisci preflight CORS
+  if (req.method === 'OPTIONS') {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+    return res.status(200).end();
+  }
+
+  // Imposta gli header CORS per tutte le altre richieste
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Accept');
+
   try {
     // Estrai i parametri dalla richiesta (supporta sia GET che POST)
     let params;
@@ -181,7 +194,8 @@ async function baseHandler(req, res) {
                     id: "${id}",
                     email: "${email}",
                     modifiedMessage: modifiedText,
-                    skipHubspot: false
+                    skipHubspot: false,
+                    fromSlack: true
                   })
                 })
                 .then(response => {
