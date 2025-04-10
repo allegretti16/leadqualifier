@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
 
 export default function Login() {
@@ -6,6 +6,14 @@ export default function Login() {
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
   const router = useRouter();
+
+  // Verifica se l'utente è già autenticato
+  useEffect(() => {
+    const isAuthenticated = localStorage.getItem('isAuthenticated') === 'true';
+    if (isAuthenticated) {
+      router.push('/messages');
+    }
+  }, [router]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -24,11 +32,19 @@ export default function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        router.push('/messages');
+        // Imposta manualmente isAuthenticated in localStorage
+        localStorage.setItem('isAuthenticated', 'true');
+        console.log('Autenticazione riuscita, reindirizzamento a /messages');
+        
+        // Prova con un timeout per dare tempo ai cookie di essere impostati
+        setTimeout(() => {
+          router.push('/messages');
+        }, 500);
       } else {
         setError(data.error || 'Errore durante l\'autenticazione');
       }
     } catch (err) {
+      console.error('Errore durante l\'autenticazione:', err);
       setError('Errore di connessione');
     } finally {
       setLoading(false);

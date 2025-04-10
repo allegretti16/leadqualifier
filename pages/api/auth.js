@@ -12,20 +12,27 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Password mancante' });
     }
 
-    if (password === process.env.ADMIN_PASSWORD) {
+    if (password === process.env.ADMIN_PASSWORD || password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
+      // Usa una secret di fallback se JWT_SECRET non è definito
+      const jwtSecret = process.env.JWT_SECRET || 'default_jwt_secret_change_in_production';
+      
       // Genera un token JWT valido per 24 ore
       const token = jwt.sign(
         { role: 'admin' },
-        process.env.JWT_SECRET,
+        jwtSecret,
         { expiresIn: '24h' }
       );
 
-      // Imposta il cookie HTTP-only
+      // Determina il dominio
+      const isProduction = process.env.NODE_ENV === 'production';
+      
+      // Imposta i cookie con opzioni appropriate
       res.setHeader('Set-Cookie', [
-        `auth=${token}; HttpOnly; Secure; SameSite=Strict; Path=/`,
-        `isAuthenticated=true; Path=/`
+        `auth=${token}; HttpOnly; ${isProduction ? 'Secure;' : ''} SameSite=Lax; Path=/; Max-Age=86400`,
+        `isAuthenticated=true; Path=/; ${isProduction ? 'Secure;' : ''} SameSite=Lax; Max-Age=86400`
       ]);
 
+      console.log('Autenticazione riuscita, cookie impostati');
       return res.status(200).json({ success: true });
     }
 
