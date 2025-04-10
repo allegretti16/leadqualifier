@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { getMessages } from '../utils/supabase';
 import Head from 'next/head';
 
 export default function Messages() {
@@ -19,9 +18,24 @@ export default function Messages() {
 
     async function fetchMessages() {
       try {
-        const data = await getMessages();
+        const response = await fetch('/api/get-messages');
+        
+        if (!response.ok) {
+          // Se la risposta è 401, significa che l'utente non è autenticato
+          if (response.status === 401) {
+            localStorage.removeItem('isAuthenticated');
+            router.push('/login');
+            return;
+          }
+          
+          const errorData = await response.json();
+          throw new Error(errorData.error || 'Errore nel recupero dei messaggi');
+        }
+        
+        const data = await response.json();
         setMessages(data);
       } catch (err) {
+        console.error('Errore:', err);
         setError(err.message);
       } finally {
         setLoading(false);
