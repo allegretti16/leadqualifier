@@ -67,6 +67,33 @@ export default function Messages() {
     }
   };
 
+  const handleReject = async (messageId) => {
+    try {
+      const response = await fetch('/api/reject', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ id: messageId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Errore nel reject del messaggio');
+      }
+
+      // Aggiorna lo stato locale del messaggio
+      setMessages(messages.map(msg => 
+        msg.message_id === messageId 
+          ? { ...msg, status: 'rejected' } 
+          : msg
+      ));
+    } catch (err) {
+      console.error('Errore:', err);
+      alert('Errore nel reject del messaggio');
+    }
+  };
+
   if (loading) return <div className="loading">Caricamento...</div>;
   if (error) return <div className="error">Errore: {error}</div>;
 
@@ -141,6 +168,13 @@ export default function Messages() {
                 >
                   Invia e Salva su HubSpot
                 </a>
+                <button 
+                  onClick={() => handleReject(message.message_id)}
+                  className="button reject"
+                  disabled={message.status === 'rejected'}
+                >
+                  Rifiuta
+                </button>
               </div>
             </div>
           ))}
@@ -228,6 +262,10 @@ export default function Messages() {
           .status.approved {
             background: #d1fae5;
             color: #065f46;
+          }
+          .status.rejected {
+            background: #fee2e2;
+            color: #991b1b;
           }
           .message-content {
             grid-column: 1 / -1;
@@ -330,6 +368,24 @@ export default function Messages() {
             .message-actions {
               flex-direction: column;
             }
+          }
+          .button.reject {
+            background-color: #ef4444;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+          }
+          .button.reject:hover {
+            background-color: #dc2626;
+          }
+          .button.reject:disabled {
+            background-color: #fca5a5;
+            cursor: not-allowed;
           }
         `}</style>
       </div>
