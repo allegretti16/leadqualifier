@@ -1,7 +1,6 @@
 import { OpenAI } from 'openai';
-import { updateMessage, getMessage } from '../../utils/supabase';
-import { authMiddleware } from '../../middleware/authMiddleware';
 import { supabaseAdmin } from '../../utils/supabase';
+import { authMiddleware } from '../../middleware/authMiddleware';
 
 const openai = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY
@@ -19,12 +18,11 @@ async function handler(req, res) {
   }
 
   try {
-    // Recupera il messaggio direttamente usando supabaseAdmin invece di getMessage
-    // per evitare il problema con .single()
+    // Recupera il messaggio usando message_id
     const { data: message, error: fetchError } = await supabaseAdmin
       .from('messages')
       .select('*')
-      .eq('id', id)
+      .eq('message_id', id)
       .limit(1);
     
     if (fetchError) {
@@ -95,7 +93,7 @@ Non includere mai pseudofirme come ---.
         message_text: generatedResponse,
         regenerated_at: new Date().toISOString()
       })
-      .eq('id', id);
+      .eq('message_id', id);
     
     if (updateError) {
       console.error('Errore nell\'aggiornamento del messaggio:', updateError);
