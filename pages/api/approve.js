@@ -43,11 +43,6 @@ function getBaseUrl() {
 }
 
 export default async function handler(req, res) {
-  // Log della richiesta per debug
-  console.log('Query parameters:', req.query);
-  console.log('Method:', req.method);
-  console.log('Body:', req.body);
-
   // Abilita CORS
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
@@ -57,6 +52,11 @@ export default async function handler(req, res) {
   if (req.method === 'OPTIONS') {
     return res.status(200).end();
   }
+
+  // Log della richiesta per debug
+  console.log('Query parameters:', req.query);
+  console.log('Method:', req.method);
+  console.log('Body:', req.body);
 
   try {
     // Estrai i parametri dalla richiesta (supporta sia GET che POST)
@@ -302,7 +302,9 @@ export default async function handler(req, res) {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
+                    'Accept': 'application/json'
                   },
+                  credentials: 'include',
                   body: JSON.stringify({
                     id: "${id}",
                     email: email,
