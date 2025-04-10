@@ -6,6 +6,7 @@ export default function Messages() {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [regenerating, setRegenerating] = useState(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -94,6 +95,38 @@ export default function Messages() {
     }
   };
 
+  const handleRegenerate = async (messageId) => {
+    try {
+      setRegenerating(messageId);
+      const response = await fetch('/api/regenerate', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify({ id: messageId })
+      });
+
+      if (!response.ok) {
+        throw new Error('Errore nella rigenerazione della risposta');
+      }
+
+      const data = await response.json();
+
+      // Aggiorna lo stato locale del messaggio con la nuova risposta
+      setMessages(messages.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, message_text: data.newText } 
+          : msg
+      ));
+    } catch (err) {
+      console.error('Errore:', err);
+      alert('Errore nella rigenerazione della risposta');
+    } finally {
+      setRegenerating(null);
+    }
+  };
+
   if (loading) return <div className="loading">Caricamento...</div>;
   if (error) return <div className="error">Errore: {error}</div>;
 
@@ -174,6 +207,13 @@ export default function Messages() {
                   disabled={message.status === 'rejected'}
                 >
                   Rifiuta
+                </button>
+                <button
+                  onClick={() => handleRegenerate(message.id)}
+                  className="button regenerate"
+                  disabled={regenerating === message.id}
+                >
+                  {regenerating === message.id ? 'Rigenerando...' : 'Rigenera Risposta'}
                 </button>
               </div>
             </div>
@@ -385,6 +425,24 @@ export default function Messages() {
           }
           .button.reject:disabled {
             background-color: #fca5a5;
+            cursor: not-allowed;
+          }
+          .button.regenerate {
+            background-color: #6366f1;
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.2s;
+          }
+          .button.regenerate:hover {
+            background-color: #4f46e5;
+          }
+          .button.regenerate:disabled {
+            background-color: #c7d2fe;
             cursor: not-allowed;
           }
         `}</style>
