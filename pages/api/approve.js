@@ -303,8 +303,12 @@ async function baseHandler(req, res) {
 
 // Wrapper che controlla se la richiesta viene da Slack
 function handler(req, res) {
+  // Controlla sia in query (GET) che in body (POST)
+  const fromSlackQuery = req.query && req.query.fromSlack === 'true';
+  const fromSlackBody = req.body && req.body.fromSlack === true;
+  
   // Se la richiesta ha il parametro fromSlack, bypassa l'autenticazione
-  if (req.query.fromSlack === 'true') {
+  if (fromSlackQuery || fromSlackBody) {
     return baseHandler(req, res);
   }
   
