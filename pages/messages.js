@@ -84,7 +84,7 @@ export default function Messages() {
 
       // Aggiorna lo stato locale del messaggio
       setMessages(messages.map(msg => 
-        msg.message_id === messageId 
+        msg.id === messageId 
           ? { ...msg, status: 'rejected' } 
           : msg
       ));
