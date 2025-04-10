@@ -35,8 +35,6 @@ async function sendApprovalConfirmationToSlack(email) {
 function getBaseUrl() {
   if (process.env.NODE_ENV === 'development') {
     return 'http://localhost:3000';
-  } else if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`;
   } else {
     return 'https://leadqualifier.vercel.app';
   }
@@ -298,13 +296,12 @@ export default async function handler(req, res) {
                 }
                 
                 // Utilizza il metodo FETCH POST per inviare i dati al server
-                fetch(baseUrl + '/api/approve', {
+                fetch('https://leadqualifier.vercel.app/api/approve', {
                   method: 'POST',
                   headers: {
                     'Content-Type': 'application/json',
                     'Accept': 'application/json'
                   },
-                  credentials: 'include',
                   body: JSON.stringify({
                     id: "${id}",
                     email: email,
