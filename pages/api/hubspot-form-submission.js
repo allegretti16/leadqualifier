@@ -97,10 +97,10 @@ function getBaseUrl() {
       }
       
       // Crea l'URL della pagina intermedia che salverà il messaggio in Supabase
-      const saveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=true`;
+      const saveUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=true&fromSlack=true`;
       
       // Crea l'URL per inviare direttamente l'email e salvare su Hubspot
-      const sendEmailUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=false`;
+      const sendEmailUrl = `${baseUrl}/api/approve?id=${messageId}&email=${encodeURIComponent(formData.email)}&skipHubspot=false&fromSlack=true`;
       
       console.log('URL Invia e salva costruito:', sendEmailUrl);
   

@@ -42,7 +42,7 @@ function getBaseUrl() {
 }
 
 // Handler principale
-async function handler(req, res) {
+async function baseHandler(req, res) {
   try {
     // Estrai i parametri dalla richiesta (supporta sia GET che POST)
     let params;
@@ -270,8 +270,18 @@ async function handler(req, res) {
   }
 }
 
-// Applica il middleware di autenticazione
-export default authMiddleware(handler);
+// Wrapper che controlla se la richiesta viene da Slack
+function handler(req, res) {
+  // Se la richiesta ha il parametro fromSlack, bypassa l'autenticazione
+  if (req.query.fromSlack === 'true') {
+    return baseHandler(req, res);
+  }
+  
+  // Altrimenti usa il middleware di autenticazione
+  return authMiddleware(baseHandler)(req, res);
+}
+
+export default handler;
 
 // funzione per inviare email su HubSpot
 export async function sendHubSpotEmail(email, message, formDetailsString) {
