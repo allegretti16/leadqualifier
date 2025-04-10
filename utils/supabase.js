@@ -2,16 +2,21 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
 
-if (!supabaseUrl || !supabaseAnonKey) {
+if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceKey) {
   throw new Error('Le variabili d\'ambiente Supabase non sono configurate correttamente')
 }
 
+// Client per il frontend (usa la chiave anonima)
 export const supabase = createClient(supabaseUrl, supabaseAnonKey)
+
+// Client per le API (usa la chiave di servizio)
+export const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey)
 
 // Funzioni per la gestione dei messaggi
 export const saveMessage = async (messageData) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('messages')
     .insert([
       {
@@ -33,7 +38,7 @@ export const saveMessage = async (messageData) => {
 export const getMessage = async (messageId) => {
   console.log('Tentativo di recupero messaggio con ID:', messageId);
   
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('messages')
     .select('*')
     .eq('message_id', messageId)
@@ -49,7 +54,7 @@ export const getMessage = async (messageId) => {
 }
 
 export const updateMessage = async (messageId, updates) => {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('messages')
     .update(updates)
     .eq('message_id', messageId)
@@ -60,7 +65,7 @@ export const updateMessage = async (messageId, updates) => {
 }
 
 export async function getMessages() {
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('messages')
     .select('*')
     .order('created_at', { ascending: false });

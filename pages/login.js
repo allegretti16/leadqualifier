@@ -4,15 +4,34 @@ import { useRouter } from 'next/router';
 export default function Login() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
   const router = useRouter();
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (password === process.env.NEXT_PUBLIC_ADMIN_PASSWORD) {
-      localStorage.setItem('isAuthenticated', 'true');
-      router.push('/messages');
-    } else {
-      setError('Password errata');
+    setLoading(true);
+    setError('');
+
+    try {
+      const response = await fetch('/api/auth', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ password }),
+      });
+
+      const data = await response.json();
+
+      if (response.ok) {
+        router.push('/messages');
+      } else {
+        setError(data.error || 'Errore durante l\'autenticazione');
+      }
+    } catch (err) {
+      setError('Errore di connessione');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -29,33 +48,31 @@ export default function Login() {
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
+              disabled={loading}
             />
           </div>
           {error && <div className="error">{error}</div>}
-          <button type="submit">Accedi</button>
+          <button type="submit" disabled={loading}>
+            {loading ? 'Caricamento...' : 'Accedi'}
+          </button>
         </form>
       </div>
 
       <style jsx>{`
         .login-container {
+          min-height: 100vh;
           display: flex;
           justify-content: center;
           align-items: center;
-          min-height: 100vh;
-          background: #f5f5f5;
+          background-color: #f3f4f6;
         }
         .login-box {
           background: white;
           padding: 2rem;
-          border-radius: 8px;
-          box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+          border-radius: 0.5rem;
+          box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
           width: 100%;
           max-width: 400px;
-        }
-        h1 {
-          text-align: center;
-          margin-bottom: 1.5rem;
-          color: #333;
         }
         .form-group {
           margin-bottom: 1rem;
@@ -63,30 +80,29 @@ export default function Login() {
         label {
           display: block;
           margin-bottom: 0.5rem;
-          color: #666;
+          color: #374151;
         }
         input {
           width: 100%;
           padding: 0.5rem;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          font-size: 1rem;
+          border: 1px solid #d1d5db;
+          border-radius: 0.25rem;
         }
         button {
           width: 100%;
           padding: 0.75rem;
-          background: #007bff;
+          background-color: #3b82f6;
           color: white;
           border: none;
-          border-radius: 4px;
-          font-size: 1rem;
+          border-radius: 0.25rem;
           cursor: pointer;
         }
-        button:hover {
-          background: #0056b3;
+        button:disabled {
+          background-color: #9ca3af;
+          cursor: not-allowed;
         }
         .error {
-          color: #dc3545;
+          color: #ef4444;
           margin-bottom: 1rem;
           text-align: center;
         }

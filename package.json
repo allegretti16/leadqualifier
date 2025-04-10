@@ -8,6 +8,7 @@
     "@slack/web-api": "^7.9.1",
     "@supabase/supabase-js": "^2.49.4",
     "googleapis": "^148.0.0",
+    "jsonwebtoken": "^9.0.2",
     "next": "^15.2.5",
     "nodemailer": "^6.9.8",
     "openai": "^4.28.0",
