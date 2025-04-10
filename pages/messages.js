@@ -161,7 +161,7 @@ export default function Messages() {
                   Modifica e Invia
                 </a>
                 <a 
-                  href={`/api/approve?id=${message.message_id}&email=${encodeURIComponent(message.email)}`}
+                  href={`/api/approve?id=${message.message_id}&email=${encodeURIComponent(message.email)}&skipHubspot=false`}
                   className="button send"
                   target="_blank"
                   rel="noopener noreferrer"
